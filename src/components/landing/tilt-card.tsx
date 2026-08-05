@@ -1,4 +1,4 @@
-import { motion, useMotionTemplate, useMotionValue, useSpring } from "motion/react";
+import { motion, useMotionTemplate, useMotionValue, useSpring, useTransform } from "motion/react";
 import type { PointerEvent, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -10,33 +10,37 @@ interface TiltCardProps {
 }
 
 /**
- * Subtle pointer-tracked 3D tilt with a following highlight.
- * Uses springs so it never feels twitchy; disabled for coarse pointers via CSS.
+ * Subtle pointer-tracked 3D tilt with a highlight that follows the cursor.
+ * Springs keep it from feeling twitchy.
  */
 export function TiltCard({ children, className, intensity = 6 }: TiltCardProps) {
-  const px = useMotionValue(0.5);
-  const py = useMotionValue(0.5);
+  const px = useMotionValue(50);
+  const py = useMotionValue(50);
+  const rx = useMotionValue(0);
+  const ry = useMotionValue(0);
 
-  const rotateX = useSpring(useMotionValue(0), { stiffness: 150, damping: 18 });
-  const rotateY = useSpring(useMotionValue(0), { stiffness: 150, damping: 18 });
+  const rotateX = useSpring(rx, { stiffness: 150, damping: 18 });
+  const rotateY = useSpring(ry, { stiffness: 150, damping: 18 });
 
-  const glow = useMotionTemplate`radial-gradient(220px circle at ${useMotionTemplate`calc(${px} * 100%)`} ${useMotionTemplate`calc(${py} * 100%)`}, color-mix(in oklab, var(--primary) 22%, transparent), transparent 70%)`;
+  const x = useTransform(px, (v) => `${v}%`);
+  const y = useTransform(py, (v) => `${v}%`);
+  const glow = useMotionTemplate`radial-gradient(240px circle at ${x} ${y}, color-mix(in oklab, var(--primary) 20%, transparent), transparent 70%)`;
 
   function handleMove(event: PointerEvent<HTMLDivElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / rect.width;
-    const y = (event.clientY - rect.top) / rect.height;
-    px.set(x);
-    py.set(y);
-    rotateY.set((x - 0.5) * intensity * 2);
-    rotateX.set((0.5 - y) * intensity * 2);
+    const nx = (event.clientX - rect.left) / rect.width;
+    const ny = (event.clientY - rect.top) / rect.height;
+    px.set(nx * 100);
+    py.set(ny * 100);
+    ry.set((nx - 0.5) * intensity * 2);
+    rx.set((0.5 - ny) * intensity * 2);
   }
 
   function handleLeave() {
-    rotateX.set(0);
-    rotateY.set(0);
-    px.set(0.5);
-    py.set(0.5);
+    rx.set(0);
+    ry.set(0);
+    px.set(50);
+    py.set(50);
   }
 
   return (
