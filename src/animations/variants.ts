@@ -1,7 +1,8 @@
-import type { Variants, Transition } from "motion/react";
+import type { Variants } from "motion/react";
 
 /** Shared easing curve for the whole product. */
-export const silk: Transition["ease"] = [0.22, 1, 0.36, 1];
+export const silk: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
 
 export const fadeUp: Variants = {
   hidden: { opacity: 0, y: 24 },
