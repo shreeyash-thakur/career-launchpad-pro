@@ -10,7 +10,7 @@ export const AuroraBackground = memo(function AuroraBackground() {
       <div className="absolute inset-0 bg-background" />
 
       <div
-        className="animate-blob absolute -left-[15%] -top-[20%] h-[70vw] w-[70vw] rounded-full opacity-45 blur-[120px]"
+        className="animate-blob absolute -left-[15%] -top-[20%] h-[70vw] w-[70vw] rounded-full opacity-35 blur-[120px]"
         style={{ background: "var(--gradient-emerald)" }}
       />
       <div
@@ -18,13 +18,13 @@ export const AuroraBackground = memo(function AuroraBackground() {
         style={{ background: "var(--gradient-gold)" }}
       />
       <div
-        className="animate-blob absolute bottom-[-25%] left-[25%] h-[60vw] w-[60vw] rounded-full opacity-25 blur-[140px] [animation-delay:-15s]"
+        className="animate-blob absolute bottom-[-25%] left-[25%] h-[60vw] w-[60vw] rounded-full opacity-20 blur-[140px] [animation-delay:-15s]"
         style={{ background: "var(--gradient-emerald)" }}
       />
 
       {/* fine grid */}
       <div
-        className="absolute inset-0 opacity-[0.055]"
+        className="absolute inset-0 text-primary opacity-[0.09]"
         style={{
           backgroundImage:
             "linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)",
@@ -32,6 +32,7 @@ export const AuroraBackground = memo(function AuroraBackground() {
           maskImage: "radial-gradient(90% 60% at 50% 0%, black, transparent 85%)",
         }}
       />
+
 
       {/* vignette */}
       <div

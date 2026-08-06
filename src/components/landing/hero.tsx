@@ -2,8 +2,8 @@ import { motion, useScroll, useTransform } from "motion/react";
 import { useRef } from "react";
 import { ArrowRight, FileText, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { fadeUp, revealOnce, silk, stagger } from "@/animations/variants";
-import heroResume from "@/assets/hero-resume.jpg";
+import { fadeUp, stagger } from "@/animations/variants";
+import { HeroScene } from "@/components/landing/hero-scene";
 
 export function Hero() {
   const ref = useRef<HTMLDivElement>(null);
@@ -78,49 +78,8 @@ export function Hero() {
           </motion.div>
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 40, rotateY: -12 }}
-          animate={{ opacity: 1, y: 0, rotateY: 0 }}
-          transition={{ duration: 1.1, ease: silk, delay: 0.15 }}
-          viewport={revealOnce}
-          style={{ y: imageY, scale: imageScale, perspective: 1200 }}
-          className="relative"
-        >
-          <div className="animate-float-slow relative">
-            <div
-              aria-hidden
-              className="absolute -inset-8 rounded-[3rem] opacity-70 blur-3xl"
-              style={{ background: "var(--gradient-hero)" }}
-            />
-            <img
-              src={heroResume}
-              width={1200}
-              height={1408}
-              alt="A CareerGPT résumé rendered in the Vellum template, floating above stat cards for projects and experience"
-              className="glass relative w-full rounded-[2rem] object-cover shadow-float"
-              fetchPriority="high"
-            />
-          </div>
-
-          <motion.div
-            initial={{ opacity: 0, x: -24 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.9, duration: 0.7, ease: silk }}
-            className="glass-strong absolute -left-3 bottom-10 hidden rounded-2xl px-4 py-3 shadow-float sm:block"
-          >
-            <p className="text-xs text-muted-foreground">ATS parse score</p>
-            <p className="font-display text-2xl font-semibold text-primary">96%</p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, x: 24 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 1.05, duration: 0.7, ease: silk }}
-            className="glass-strong absolute -right-3 top-14 hidden rounded-2xl px-4 py-3 shadow-float sm:block"
-          >
-            <p className="text-xs text-muted-foreground">Autosaved</p>
-            <p className="font-display text-sm font-semibold text-gold">2 seconds ago</p>
-          </motion.div>
+        <motion.div style={{ y: imageY, scale: imageScale }} className="relative">
+          <HeroScene />
         </motion.div>
       </div>
     </section>
