@@ -200,7 +200,7 @@
 }
 
 @utility text-gradient-emerald {
-  background: linear-gradient(120deg, var(--emerald-glow), var(--gold));
+  background: linear-gradient(120deg, var(--primary), var(--emerald-glow) 45%, var(--gold));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
