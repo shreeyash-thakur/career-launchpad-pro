@@ -270,3 +270,29 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* --- Résumé builder: print / PDF export --- */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .no-print-clip {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    padding: 0 !important;
+  }
+  .preview-scale-wrapper {
+    transform: none !important;
+    position: static !important;
+    margin: 0 !important;
+  }
+  .resume-page {
+    box-shadow: none !important;
+    margin: 0 auto !important;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+}

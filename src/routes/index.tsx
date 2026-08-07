@@ -14,9 +14,7 @@ const ResumeShowcase = lazy(() =>
 const TemplateShowcase = lazy(() =>
   import("@/components/landing/template-showcase").then((m) => ({ default: m.TemplateShowcase })),
 );
-const Stats = lazy(() =>
-  import("@/components/landing/stats").then((m) => ({ default: m.Stats })),
-);
+const Stats = lazy(() => import("@/components/landing/stats").then((m) => ({ default: m.Stats })));
 const Benefits = lazy(() =>
   import("@/components/landing/benefits").then((m) => ({ default: m.Benefits })),
 );

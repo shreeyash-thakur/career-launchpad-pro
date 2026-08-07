@@ -33,7 +33,6 @@ export const AuroraBackground = memo(function AuroraBackground() {
         }}
       />
 
-
       {/* vignette */}
       <div
         className="absolute inset-0"

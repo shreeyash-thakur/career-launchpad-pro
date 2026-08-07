@@ -1,5 +1,6 @@
 import { motion, useScroll, useTransform } from "motion/react";
 import { useRef } from "react";
+import { Link } from "@tanstack/react-router";
 import { ArrowRight, FileText, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fadeUp, stagger } from "@/animations/variants";
@@ -47,19 +48,26 @@ export function Hero() {
             career.
           </motion.h1>
 
-          <motion.p variants={fadeUp} className="max-w-xl text-pretty text-lg text-muted-foreground">
+          <motion.p
+            variants={fadeUp}
+            className="max-w-xl text-pretty text-lg text-muted-foreground"
+          >
             Drag-and-drop sections, a live print-accurate preview, and a customization suite
             designers actually asked for. No templates that look like everyone else&apos;s.
           </motion.p>
 
           <motion.div variants={fadeUp} className="flex flex-wrap items-center gap-3">
-            <Button variant="hero" size="xl">
-              Start building free
-              <ArrowRight />
+            <Button variant="hero" size="xl" asChild>
+              <Link to="/builder">
+                Start building free
+                <ArrowRight />
+              </Link>
             </Button>
-            <Button variant="glass" size="xl">
-              <FileText />
-              Browse templates
+            <Button variant="glass" size="xl" asChild>
+              <Link to="/builder" hash="templates">
+                <FileText />
+                Browse templates
+              </Link>
             </Button>
           </motion.div>
 

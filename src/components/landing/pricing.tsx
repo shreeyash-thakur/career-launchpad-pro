@@ -31,9 +31,7 @@ export function Pricing() {
               transition={{ type: "spring", stiffness: 240, damping: 20 }}
               className={cn(
                 "relative flex flex-col gap-6 rounded-3xl p-8",
-                plan.featured
-                  ? "glass-strong shadow-glow lg:-my-4 lg:py-12"
-                  : "glass",
+                plan.featured ? "glass-strong shadow-glow lg:-my-4 lg:py-12" : "glass",
               )}
             >
               {plan.featured ? (
