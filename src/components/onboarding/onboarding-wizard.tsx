@@ -91,25 +91,32 @@ type Answers = Record<string, string>;
 function recommendTemplate(answers: Answers): string {
   const { experience, industry, style, layout } = answers;
 
-  if (industry === "tech" || style === "technical" || experience === "student") {
+  if (industry === "finance") {
+    if (layout === "compact") return "wall-street-finance";
+    return "mckinsey-consulting";
+  }
+  if (industry === "tech" || style === "technical") {
+    if (layout === "two-col") return "react-developer";
     if (layout === "compact") return "compact-ats";
-    if (layout === "timeline") return "timeline";
+    if (experience === "senior") return "ai-research";
     return "developer";
+  }
+  if (experience === "student") {
+    if (layout === "two-col") return "teal-sidebar";
+    return "campus-graduate";
   }
   if (style === "bold" || industry === "marketing") {
     if (layout === "two-col") return "creative";
-    return "bold-header";
+    return "editorial-slate";
   }
   if (experience === "senior" || style === "corporate") {
-    if (layout === "two-col") return "elegant";
-    return "executive";
-  }
-  if (experience === "student") {
-    return "minimal";
+    if (layout === "compact") return "harvard-ats";
+    if (layout === "two-col") return "teal-sidebar";
+    return "mckinsey-consulting";
   }
   if (layout === "timeline") return "timeline";
-  if (layout === "two-col") return "elegant";
-  if (layout === "compact") return "compact-ats";
+  if (layout === "two-col") return "teal-sidebar";
+  if (layout === "compact") return "harvard-ats";
   if (style === "minimal") return "minimal";
   return "modern";
 }

@@ -13,6 +13,14 @@ import { BoldHeaderTemplate } from "./bold-header";
 import { AcademicTemplate } from "./academic";
 import { TechGridTemplate } from "./tech-grid";
 import { StartupTemplate } from "./startup";
+import { HarvardAtsTemplate } from "./harvard-ats";
+import { MckinseyConsultingTemplate } from "./mckinsey-consulting";
+import { WallStreetFinanceTemplate } from "./wall-street-finance";
+import { ReactDeveloperTemplate } from "./react-developer";
+import { TealSidebarTemplate } from "./teal-sidebar";
+import { EditorialSlateTemplate } from "./editorial-slate";
+import { AiResearchTemplate } from "./ai-research";
+import { CampusGraduateTemplate } from "./campus-graduate";
 
 export type { TemplateProps };
 
@@ -43,6 +51,15 @@ export const TEMPLATES: (TemplateMeta & { Component: ComponentType<TemplateProps
     Component: CompactAtsTemplate,
   },
   {
+    id: "harvard-ats",
+    name: "Harvard Standard ATS",
+    category: "ATS-friendly",
+    description:
+      "Gold-standard Ivy League traditional single-column template for strict ATS parsers.",
+    columns: 1,
+    Component: HarvardAtsTemplate,
+  },
+  {
     id: "executive",
     name: "Executive",
     category: "Formal",
@@ -51,12 +68,38 @@ export const TEMPLATES: (TemplateMeta & { Component: ComponentType<TemplateProps
     Component: ExecutiveTemplate,
   },
   {
+    id: "mckinsey-consulting",
+    name: "McKinsey Strategy Consultant",
+    category: "Corporate",
+    description:
+      "Ultra-clean, high-density single-column format favored in management consulting.",
+    columns: 1,
+    Component: MckinseyConsultingTemplate,
+  },
+  {
+    id: "wall-street-finance",
+    name: "Wall Street Finance Lead",
+    category: "Finance",
+    description:
+      "Formal double-ruled lines with serif typography for banking and private equity.",
+    columns: 1,
+    Component: WallStreetFinanceTemplate,
+  },
+  {
     id: "elegant",
     name: "Elegant",
     category: "Two column",
     description: "Soft-toned sidebar with a photo and serif headers — refined, not flashy.",
     columns: 2,
     Component: ElegantTemplate,
+  },
+  {
+    id: "teal-sidebar",
+    name: "Teal Vista Sidebar",
+    category: "Two column",
+    description: "Luminous teal sidebar layout with initials avatar badge and clean sections.",
+    columns: 2,
+    Component: TealSidebarTemplate,
   },
   {
     id: "creative",
@@ -91,6 +134,15 @@ export const TEMPLATES: (TemplateMeta & { Component: ComponentType<TemplateProps
     Component: DeveloperTemplate,
   },
   {
+    id: "react-developer",
+    name: "Full-Stack React & Node",
+    category: "Developer",
+    description:
+      "Two-column developer layout optimized for framework chips and GitHub repository links.",
+    columns: 2,
+    Component: ReactDeveloperTemplate,
+  },
+  {
     id: "tech-grid",
     name: "Tech Grid",
     category: "Technical",
@@ -100,12 +152,39 @@ export const TEMPLATES: (TemplateMeta & { Component: ComponentType<TemplateProps
     Component: TechGridTemplate,
   },
   {
+    id: "ai-research",
+    name: "AI & ML Research Spec",
+    category: "Engineering",
+    description:
+      "Gradient accent bar with compact metrics display for data science and AI researchers.",
+    columns: 1,
+    Component: AiResearchTemplate,
+  },
+  {
     id: "timeline",
     name: "Timeline",
     category: "Visual",
     description: "A connected timeline highlights career and education progression at a glance.",
     columns: 1,
     Component: TimelineTemplate,
+  },
+  {
+    id: "editorial-slate",
+    name: "Editorial Slate",
+    category: "Creative",
+    description:
+      "Magazine-style serif layout with generous whitespace for writers and content leads.",
+    columns: 1,
+    Component: EditorialSlateTemplate,
+  },
+  {
+    id: "campus-graduate",
+    name: "Campus Graduate Blue",
+    category: "Student",
+    description:
+      "Centered header layout prioritizing Education and Projects for freshers and interns.",
+    columns: 1,
+    Component: CampusGraduateTemplate,
   },
   {
     id: "academic",
