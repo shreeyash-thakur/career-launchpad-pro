@@ -1,12 +1,6 @@
 import { useRef } from "react";
 import type { PointerEvent } from "react";
-import {
-  motion,
-  useMotionTemplate,
-  useMotionValue,
-  useSpring,
-  useTransform,
-} from "motion/react";
+import { motion, useMotionTemplate, useMotionValue, useSpring, useTransform } from "motion/react";
 import { CheckCircle2, Download, Sparkles } from "lucide-react";
 import heroResume from "@/assets/hero-resume.jpg";
 
@@ -61,10 +55,7 @@ export function HeroScene() {
         className="absolute -inset-10 rounded-[4rem] opacity-90 blur-3xl"
       />
 
-      <motion.div
-        style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
-        className="relative"
-      >
+      <motion.div style={{ rotateX, rotateY, transformStyle: "preserve-3d" }} className="relative">
         {/* depth plate #2 */}
         <div
           aria-hidden

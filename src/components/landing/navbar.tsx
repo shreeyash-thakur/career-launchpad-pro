@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useScroll, useMotionValueEvent } from "motion/react";
+import { Link } from "@tanstack/react-router";
 import { Menu, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NAV_LINKS } from "@/constants/landing";
@@ -34,12 +35,12 @@ export function Navbar() {
           scrolled ? "glass-strong shadow-float" : "border border-transparent",
         )}
       >
-        <a href="#top" className="flex items-center gap-2 font-display text-base font-semibold">
+        <Link to="/" className="flex items-center gap-2 font-display text-base font-semibold">
           <span className="flex size-8 items-center justify-center rounded-xl bg-[image:var(--gradient-emerald)] text-primary-foreground">
             <Sparkles className="size-4" />
           </span>
           CareerGPT
-        </a>
+        </Link>
 
         <ul className="hidden items-center gap-1 md:flex">
           {NAV_LINKS.map((link) => (
@@ -55,11 +56,8 @@ export function Navbar() {
         </ul>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Button variant="ghost" size="sm">
-            Sign in
-          </Button>
-          <Button variant="hero" size="sm" className="rounded-lg">
-            Build my resume
+          <Button variant="hero" size="sm" className="rounded-lg" asChild>
+            <Link to="/builder">Build my resume</Link>
           </Button>
         </div>
 
@@ -98,11 +96,10 @@ export function Navbar() {
               ))}
             </ul>
             <div className="mt-3 flex flex-col gap-2">
-              <Button variant="glass" className="w-full rounded-xl">
-                Sign in
-              </Button>
-              <Button variant="hero" className="w-full rounded-xl">
-                Build my resume
+              <Button variant="hero" className="w-full rounded-xl" asChild>
+                <Link to="/builder" onClick={() => setOpen(false)}>
+                  Build my resume
+                </Link>
               </Button>
             </div>
           </motion.div>
