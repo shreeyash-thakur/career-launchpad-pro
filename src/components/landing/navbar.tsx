@@ -57,7 +57,7 @@ export function Navbar() {
 
         <div className="hidden items-center gap-2 md:flex">
           <Button variant="hero" size="sm" className="rounded-lg" asChild>
-            <Link to="/builder">Build my resume</Link>
+            <Link to="/onboarding">Build my resume</Link>
           </Button>
         </div>
 
@@ -97,7 +97,7 @@ export function Navbar() {
             </ul>
             <div className="mt-3 flex flex-col gap-2">
               <Button variant="hero" className="w-full rounded-xl" asChild>
-                <Link to="/builder" onClick={() => setOpen(false)}>
+                <Link to="/onboarding" onClick={() => setOpen(false)}>
                   Build my resume
                 </Link>
               </Button>

@@ -58,16 +58,16 @@ export function Hero() {
 
           <motion.div variants={fadeUp} className="flex flex-wrap items-center gap-3">
             <Button variant="hero" size="xl" asChild>
-              <Link to="/builder">
+              <Link to="/onboarding">
                 Start building free
                 <ArrowRight />
               </Link>
             </Button>
             <Button variant="glass" size="xl" asChild>
-              <Link to="/builder" hash="templates">
+              <a href="#templates">
                 <FileText />
                 Browse templates
-              </Link>
+              </a>
             </Button>
           </motion.div>
 

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
 import {
   Accordion,
   AccordionContent,
@@ -23,6 +24,8 @@ import { SectionOrderForm } from "@/features/resume-builder/components/section-o
 import { TemplatePicker } from "@/features/resume-builder/components/template-picker";
 import { CustomizePanel } from "@/features/resume-builder/components/customize-panel";
 import { ResumePreview } from "@/features/resume-builder/components/resume-preview";
+import { getTemplate } from "@/features/resume-builder/templates";
+import { Sparkles, X } from "lucide-react";
 
 export const Route = createFileRoute("/builder")({
   head: () => ({
@@ -35,15 +38,75 @@ export const Route = createFileRoute("/builder")({
       },
     ],
   }),
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { template?: string | undefined; fromOnboarding?: string | undefined } => ({
+    template: typeof search["template"] === "string" ? search["template"] : undefined,
+    fromOnboarding:
+      typeof search["fromOnboarding"] === "string" ? search["fromOnboarding"] : undefined,
+  }),
   component: BuilderPage,
 });
 
 function BuilderPage() {
   const store = useResumeStore();
   const { data, setData, style, setStyle } = store;
+  const search = Route.useSearch();
+  const appliedRef = useRef(false);
+  const [showBanner, setShowBanner] = useState(false);
+
+  // Apply template from URL search param (from onboarding or landing page)
+  useEffect(() => {
+    if (appliedRef.current) return;
+    const templateId = search.template;
+    if (templateId) {
+      const found = getTemplate(templateId);
+      if (found) {
+        setStyle((prev) => ({ ...prev, templateId: found.id }));
+        if (search.fromOnboarding === "1") {
+          setShowBanner(true);
+        }
+      }
+      appliedRef.current = true;
+    }
+  }, [search.template, search.fromOnboarding, setStyle]);
+
+  // Auto-dismiss banner after 5 seconds
+  useEffect(() => {
+    if (!showBanner) return;
+    const t = setTimeout(() => setShowBanner(false), 5000);
+    return () => clearTimeout(t);
+  }, [showBanner]);
+
+  const recommendedName = search.template
+    ? getTemplate(search.template)?.name ?? "template"
+    : "template";
 
   return (
     <div className="flex h-svh flex-col bg-secondary/30">
+      {/* Onboarding recommendation banner */}
+      {showBanner && (
+        <div className="no-print relative flex items-center justify-between gap-3 bg-[color-mix(in_oklab,var(--primary)_12%,var(--background))] border-b border-primary/20 px-4 py-2.5 text-sm">
+          <div className="flex items-center gap-2 text-primary">
+            <Sparkles className="size-4 shrink-0" aria-hidden="true" />
+            <span>
+              Based on your answers, we selected the{" "}
+              <strong className="font-semibold">{recommendedName}</strong> template for you.
+              Switch anytime in the Design tab.
+            </span>
+          </div>
+          <button
+            id="dismiss-onboarding-banner"
+            type="button"
+            onClick={() => setShowBanner(false)}
+            className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Dismiss"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      )}
+
       <BuilderToolbar
         data={data}
         style={style}

@@ -1,4 +1,5 @@
 import { motion } from "motion/react";
+import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fadeUp, revealOnce, stagger } from "@/animations/variants";
@@ -28,9 +29,11 @@ export function CtaBanner() {
           Start with a template, make it yours, export in a click. Free to begin, no card needed.
         </motion.p>
         <motion.div variants={fadeUp} className="relative flex flex-wrap justify-center gap-3">
-          <Button variant="hero" size="xl">
-            Build my résumé
-            <ArrowRight />
+          <Button variant="hero" size="xl" asChild>
+            <Link to="/onboarding">
+              Build my résumé
+              <ArrowRight />
+            </Link>
           </Button>
           <Button variant="glass" size="xl">
             Talk to us
