@@ -43,7 +43,11 @@ function FinalCheckPage() {
       await download(format);
     } catch (err) {
       console.error("Failed to export resume:", err);
-      toast.error("Couldn't generate the download. Please try again.");
+      const message =
+        err instanceof Error && /render|generate/i.test(err.message)
+          ? err.message
+          : "Couldn't generate the download. Please try again.";
+      toast.error(message);
     }
   }
 

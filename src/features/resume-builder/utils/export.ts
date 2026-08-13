@@ -1,4 +1,5 @@
 import html2canvas from "html2canvas-pro";
+import type { Options as Html2CanvasOptions } from "html2canvas-pro";
 import { jsPDF } from "jspdf";
 import type { PageSize } from "../types";
 import { PAGE_DIMENSIONS } from "../templates/resume-page";
@@ -7,9 +8,124 @@ export type ExportFormat = "pdf" | "png" | "jpg";
 
 /** Crisp on retina screens without producing an unreasonably large capture. */
 const PIXEL_RATIO = 2;
+/** How many capture attempts (with escalating fallback options) before giving up. */
+const MAX_CAPTURE_ATTEMPTS = 3;
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Forces the browser to run layout so the (possibly off-screen) export node
+ * is fully laid out, and gives web fonts/images a moment to settle before we
+ * screenshot it. Without this the capture can come back blank.
+ */
+async function waitForLayoutAndFonts(node: HTMLElement) {
+  if (document.fonts?.ready) {
+    await Promise.race([document.fonts.ready, wait(1500)]);
+  }
+
+  // Force a synchronous layout flush so the node has real dimensions even
+  // while positioned off-screen.
+  void node.offsetHeight;
+  void node.offsetWidth;
+
+  // Give the browser one more frame to paint layout changes.
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+
+  // Small settle delay for any async images (photos) or transitions.
+  await wait(50);
+}
+
+/**
+ * Renders `node` into a canvas using html2canvas. Returns the canvas, or
+ * `null` if the capture produced an effectively blank page so we can retry
+ * with more permissive options instead of shipping an empty file.
+ */
+async function captureNode(
+  node: HTMLElement,
+  options: Partial<Html2CanvasOptions>,
+): Promise<HTMLCanvasElement | null> {
+  const canvas = await html2canvas(node, options);
+  return isBlank(canvas) ? null : canvas;
+}
+
+/**
+ * A cheap "is this page blank?" check. Samples a grid of pixels across the
+ * whole canvas; if every sampled pixel is near-white (or transparent) we
+ * treat the capture as empty and retry.
+ */
+function isBlank(canvas: HTMLCanvasElement): boolean {
+  let ctx: CanvasRenderingContext2D | null = null;
+  try {
+    ctx = canvas.getContext("2d");
+  } catch {
+    return false;
+  }
+  if (!ctx) return false;
+
+  const { width, height } = canvas;
+  let data: Uint8ClampedArray;
+  try {
+    data = ctx.getImageData(0, 0, width, height).data;
+  } catch {
+    return false; // Tainted canvas — can't read pixels; assume not blank.
+  }
+
+  const step = 32;
+  let colored = 0;
+  let total = 0;
+  for (let y = 0; y < height; y += step) {
+    for (let x = 0; x < width; x += step) {
+      const i = (y * width + x) * 4;
+      const r = data[i] ?? 0;
+      const g = data[i + 1] ?? 0;
+      const b = data[i + 2] ?? 0;
+      const a = data[i + 3] ?? 0;
+      total++;
+      if (a > 40 && (r < 245 || g < 245 || b < 245)) colored++;
+    }
+  }
+  if (total === 0) return true;
+  return colored / total < 0.005;
+}
+
+async function captureWithRetry(node: HTMLElement): Promise<HTMLCanvasElement> {
+  const baseOptions: Partial<Html2CanvasOptions> = {
+    scale: PIXEL_RATIO,
+    backgroundColor: "#ffffff",
+    useCORS: true,
+  };
+  const fallbackOptions: Partial<Html2CanvasOptions>[] = [
+    baseOptions,
+    { ...baseOptions, scale: 1 },
+    { ...baseOptions, scale: 1, allowTaint: true, useCORS: false },
+  ];
+
+  let fullCanvas: HTMLCanvasElement | null = null;
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < MAX_CAPTURE_ATTEMPTS; attempt++) {
+    try {
+      if (attempt > 0) await wait(100);
+      fullCanvas = await captureNode(node, fallbackOptions[attempt] ?? baseOptions);
+      if (fullCanvas) break;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  if (!fullCanvas) {
+    throw new Error(
+      lastError instanceof Error
+        ? `Could not render the resume for download (${lastError.message}).`
+        : "Could not render the resume for download.",
+    );
+  }
+  return fullCanvas;
 }
 
 function sliceIntoPages(source: HTMLCanvasElement, pageWidthPx: number, pageHeightPx: number) {
@@ -80,17 +196,10 @@ export async function downloadResume(
   format: ExportFormat,
   filenameBase: string,
 ) {
-  // Wait for web fonts so the capture doesn't fall back to system fonts.
-  if (document.fonts?.ready) {
-    await Promise.race([document.fonts.ready, wait(1500)]);
-  }
+  await waitForLayoutAndFonts(node);
 
   const dims = PAGE_DIMENSIONS[pageSize];
-  const fullCanvas = await html2canvas(node, {
-    scale: PIXEL_RATIO,
-    backgroundColor: "#ffffff",
-    useCORS: true,
-  });
+  const fullCanvas = await captureWithRetry(node);
 
   const pageWidthPx = Math.round(dims.width * PIXEL_RATIO);
   const pageHeightPx = Math.round(dims.height * PIXEL_RATIO);

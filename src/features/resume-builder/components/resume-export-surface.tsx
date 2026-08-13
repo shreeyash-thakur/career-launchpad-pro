@@ -53,7 +53,7 @@ export function useResumeExport(
         style={{
           position: "fixed",
           top: 0,
-          left: "-99999px",
+          left: "-10000px",
           // Layout still runs at full fidelity here; this only moves the
           // box out of the viewport so nothing is visibly shown or
           // scrollable to the person using the page.
