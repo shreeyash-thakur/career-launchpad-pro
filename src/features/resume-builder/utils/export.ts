@@ -9,7 +9,7 @@ export type ExportFormat = "pdf" | "png" | "jpg";
 /** Crisp on retina screens without producing an unreasonably large capture. */
 const PIXEL_RATIO = 2;
 /** How many capture attempts (with escalating fallback options) before giving up. */
-const MAX_CAPTURE_ATTEMPTS = 3;
+const MAX_CAPTURE_ATTEMPTS = 4;
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -101,6 +101,17 @@ async function captureWithRetry(node: HTMLElement): Promise<HTMLCanvasElement> {
     useCORS: true,
   };
   const fallbackOptions: Partial<Html2CanvasOptions>[] = [
+    // html2canvas's default strategy clones the whole document into a
+    // temporary iframe and then locates our node inside that clone by
+    // walking DOM child indices. Anything elsewhere on the page that
+    // mutates the DOM while that clone is being built/loaded (Framer
+    // Motion enter/exit animations, toasts, autosave re-renders, etc.)
+    // can shift those indices and make html2canvas throw "Unable to find
+    // element in cloned iframe" — or silently capture a blank page if the
+    // clone's fonts/images hadn't finished painting yet. Rendering via an
+    // inline SVG <foreignObject> instead avoids the clone-and-walk step
+    // entirely, so it isn't vulnerable to that race. Try it first.
+    { ...baseOptions, foreignObjectRendering: true },
     baseOptions,
     { ...baseOptions, scale: 1 },
     { ...baseOptions, scale: 1, allowTaint: true, useCORS: false },
