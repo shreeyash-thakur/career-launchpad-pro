@@ -1,0 +1,22 @@
+/* Sage Chevron — sage sidebar under a blush portrait cap. */
+.tpl-sage {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.tpl-sage__heading {
+  position: relative;
+  padding-left: 1.1em;
+}
+
+.tpl-sage__heading::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.3em;
+  width: 0;
+  height: 0;
+  border-top: 0.35em solid transparent;
+  border-bottom: 0.35em solid transparent;
+  border-left: 0.5em solid #7ba49d;
+}

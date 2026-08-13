@@ -1,0 +1,14 @@
+/* Paper Classic — a printed-sheet feel with a soft amber swoosh at the top. */
+.tpl-paper {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.tpl-paper__swoosh {
+  height: 2.4em;
+  margin-left: -2.5rem;
+  margin-right: -2.5rem;
+  background: #f0c92e;
+  border-bottom-left-radius: 100% 90%;
+  border-bottom-right-radius: 100% 90%;
+}

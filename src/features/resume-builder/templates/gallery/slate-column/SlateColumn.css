@@ -1,0 +1,5 @@
+/* Slate Column — dark slate sidebar against a warm paper body. */
+.tpl-slate {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}

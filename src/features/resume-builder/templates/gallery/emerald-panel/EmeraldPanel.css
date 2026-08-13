@@ -1,0 +1,5 @@
+/* Emerald Panel — deep green right panel with light chips. */
+.tpl-emerald {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}

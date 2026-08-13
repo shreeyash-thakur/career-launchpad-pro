@@ -1,0 +1,5 @@
+/* Golden Column — champagne sidebar with a gold rule under the name. */
+.tpl-golden {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}

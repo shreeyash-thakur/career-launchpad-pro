@@ -1,0 +1,5 @@
+/* Bronze License — bronze accents on a clean white sheet. */
+.tpl-bronze {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}

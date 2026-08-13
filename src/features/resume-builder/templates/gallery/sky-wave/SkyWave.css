@@ -1,0 +1,11 @@
+/* Sky Wave — blue sidebar with a curved cap behind the portrait. */
+.tpl-sky {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.tpl-sky__cap {
+  background: #1f5c85;
+  border-bottom-left-radius: 40% 100%;
+  border-bottom-right-radius: 40% 100%;
+}

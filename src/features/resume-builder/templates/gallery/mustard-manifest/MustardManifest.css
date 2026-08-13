@@ -1,0 +1,10 @@
+/* Mustard Manifest — single-column ATS layout with mustard heading bars. */
+.tpl-mustard {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.tpl-mustard__heading {
+  border-bottom: 3px solid #e8b52a;
+  padding-bottom: 0.2em;
+}

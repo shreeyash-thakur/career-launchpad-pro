@@ -1,0 +1,17 @@
+/* Olive Wave — curved divider under the header, drawn with CSS only. */
+.tpl-olive {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.tpl-olive__wave {
+  height: 1.8em;
+  background: #6b6b16;
+  border-bottom-left-radius: 60% 100%;
+  border-bottom-right-radius: 20% 100%;
+}
+
+.tpl-olive__heading::first-letter {
+  font-size: 1.5em;
+  line-height: 1;
+}

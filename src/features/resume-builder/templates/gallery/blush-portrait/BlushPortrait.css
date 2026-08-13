@@ -1,0 +1,5 @@
+/* Blush Portrait — print-safe backgrounds for the two-tone page. */
+.tpl-blush {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}

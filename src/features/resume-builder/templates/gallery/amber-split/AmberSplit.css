@@ -1,0 +1,5 @@
+/* Amber Split — 62/38 colour block split. */
+.tpl-amber {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}

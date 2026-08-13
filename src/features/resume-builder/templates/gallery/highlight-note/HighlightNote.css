@@ -1,0 +1,11 @@
+/* Highlight Note — soft highlighter marker behind the name and headings. */
+.tpl-note {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.tpl-note__name,
+.tpl-note__heading {
+  background: linear-gradient(transparent 18%, #ffe27a 18%, #ffe27a 94%, transparent 94%);
+  padding: 0 0.3em;
+}

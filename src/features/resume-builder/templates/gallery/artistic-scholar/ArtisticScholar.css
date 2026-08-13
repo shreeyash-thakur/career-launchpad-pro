@@ -1,0 +1,16 @@
+/* Artistic Scholar — highlighter marker behind headings, taped polaroid photo. */
+.tpl-artistic {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  background-color: #f4f2ef;
+}
+
+.tpl-artistic__heading {
+  background: linear-gradient(transparent 12%, #ffe14d 12%, #ffe14d 92%, transparent 92%);
+  padding: 0 0.35em;
+  transform: rotate(-0.6deg);
+}
+
+.tpl-artistic__polaroid {
+  transform: rotate(-1.2deg);
+}

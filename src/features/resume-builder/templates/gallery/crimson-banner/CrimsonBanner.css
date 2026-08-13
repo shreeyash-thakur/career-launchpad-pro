@@ -1,0 +1,14 @@
+/* Crimson Banner — diagonal pinstripe header/footer bands, no raster images. */
+.tpl-crimson {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.tpl-crimson__banner {
+  background-color: #a52a1f;
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.07) 0 6px,
+    rgba(0, 0, 0, 0.07) 6px 12px
+  );
+}

@@ -1,0 +1,11 @@
+/* Steel Arc — steel-blue sidebar with an arched header block. */
+.tpl-steel {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.tpl-steel__arc {
+  background: #3d668c;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 3.5em;
+}
