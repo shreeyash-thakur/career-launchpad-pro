@@ -4,15 +4,16 @@ import { GoogleAuthProvider, getAuth, type Auth } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 
-// CareerGPT Firebase configuration — values come from .env (see .env.example).
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: import.meta.env["VITE_FIREBASE_API_KEY"],
-  authDomain: import.meta.env["VITE_FIREBASE_AUTH_DOMAIN"],
-  projectId: import.meta.env["VITE_FIREBASE_PROJECT_ID"],
-  storageBucket: import.meta.env["VITE_FIREBASE_STORAGE_BUCKET"],
-  messagingSenderId: import.meta.env["VITE_FIREBASE_MESSAGING_SENDER_ID"],
-  appId: import.meta.env["VITE_FIREBASE_APP_ID"],
-  measurementId: import.meta.env["VITE_FIREBASE_MEASUREMENT_ID"],
+  apiKey: "AIzaSyB6Yq3Zza49qcaUmu3TvpfzHGz135Rnhqw",
+  authDomain: "resumemaker-4dcec.firebaseapp.com",
+  projectId: "resumemaker-4dcec",
+  storageBucket: "resumemaker-4dcec.firebasestorage.app",
+  messagingSenderId: "110761102358",
+  appId: "1:110761102358:web:8a48f113a449bbc055b937",
+  measurementId: "G-CBVKGZZLY3",
 };
 
 /**
@@ -36,7 +37,7 @@ function assertBrowser(): void {
   }
 }
 
-/** True once real Firebase config values are present in .env. */
+/** True once real Firebase config values are present. Config is hardcoded, so this is always true. */
 export function isFirebaseConfigured(): boolean {
   return Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
 }
