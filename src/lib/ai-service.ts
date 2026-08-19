@@ -4,11 +4,14 @@
  * professional writing and structured suggestions.
  */
 
-const OPENROUTER_API_KEY = "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";
+const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY as string;
 const MODEL = "meta-llama/llama-3.3-70b-instruct:free";
 const BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 async function callAI(systemPrompt: string, userMessage: string): Promise<string> {
+  if (!OPENROUTER_API_KEY) {
+    throw new Error("VITE_OPENROUTER_API_KEY is not set. Add it to your .env file.");
+  }
   const res = await fetch(BASE_URL, {
     method: "POST",
     headers: {
