@@ -4,7 +4,7 @@
  * professional writing and structured suggestions.
  */
 
-const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY as string;
+const OPENROUTER_API_KEY = import.meta.env["VITE_OPENROUTER_API_KEY"] as string;
 const MODEL = "meta-llama/llama-3.3-70b-instruct:free";
 const BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
 
