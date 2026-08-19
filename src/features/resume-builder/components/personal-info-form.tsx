@@ -4,7 +4,9 @@ import { Field } from "./field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { AiButton } from "@/components/ui/ai-button";
 import { ImagePlus, X } from "lucide-react";
+import { generateSummary } from "@/lib/ai-service";
 
 interface Props {
   data: ResumeData;
@@ -139,22 +141,22 @@ export function PersonalInfoForm({ data, onChange, showPhoto }: Props) {
           className="min-h-24"
         />
       </Field>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="text-xs text-muted-foreground"
-        onClick={() =>
-          onChange((prev) => ({
-            ...prev,
-            summary: prev.summary.trim()
-              ? prev.summary
-              : "Results-driven professional with a track record of delivering measurable impact. Skilled at collaborating across teams to ship high-quality work on tight timelines.",
-          }))
-        }
+      <AiButton
+        onClick={async () => {
+          const topSkills = data.skills.flatMap((g) => g.items).slice(0, 6);
+          const recentExp = data.experience[0];
+          const summary = await generateSummary({
+            fullName: data.personal.fullName,
+            title: data.personal.title,
+            topSkills,
+            recentRole: recentExp?.role ?? "",
+            recentCompany: recentExp?.company ?? "",
+          });
+          onChange((prev) => ({ ...prev, summary }));
+        }}
       >
-        Suggest a starter summary
-      </Button>
+        Write summary with AI
+      </AiButton>
     </div>
   );
 }

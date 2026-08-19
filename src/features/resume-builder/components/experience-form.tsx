@@ -6,8 +6,10 @@ import { ListItemShell } from "./list-item-shell";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { AiButton } from "@/components/ui/ai-button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus } from "lucide-react";
+import { generateExperienceBullets } from "@/lib/ai-service";
 
 interface Props {
   data: ResumeData;
@@ -120,7 +122,22 @@ export function ExperienceForm({ data, onChange }: Props) {
           </label>
 
           <div className="space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Highlights</span>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">Highlights</span>
+              <AiButton
+                size="xs"
+                onClick={async () => {
+                  const bullets = await generateExperienceBullets({
+                    role: exp.role,
+                    company: exp.company,
+                    existingBullets: exp.bullets.filter(Boolean),
+                  });
+                  if (bullets.length) update(index, { bullets });
+                }}
+              >
+                Generate bullets
+              </AiButton>
+            </div>
             {exp.bullets.map((bullet, bulletIndex) => (
               <div key={bulletIndex} className="flex gap-1.5">
                 <Textarea

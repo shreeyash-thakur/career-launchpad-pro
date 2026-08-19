@@ -6,7 +6,9 @@ import { ListItemShell } from "./list-item-shell";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { AiButton } from "@/components/ui/ai-button";
 import { Plus } from "lucide-react";
+import { generateProjectDescription } from "@/lib/ai-service";
 
 interface Props {
   data: ResumeData;
@@ -56,6 +58,20 @@ export function ProjectsForm({ data, onChange }: Props) {
               placeholder="What it does and the impact it had"
               className="min-h-16"
             />
+            <AiButton
+              size="xs"
+              className="mt-1"
+              onClick={async () => {
+                const description = await generateProjectDescription({
+                  name: proj.name,
+                  tech: proj.tech.filter(Boolean),
+                  existingDescription: proj.description,
+                });
+                update(index, { description });
+              }}
+            >
+              Write description with AI
+            </AiButton>
           </Field>
           <div className="grid grid-cols-2 gap-2.5">
             <Field label="Tech (comma separated)">

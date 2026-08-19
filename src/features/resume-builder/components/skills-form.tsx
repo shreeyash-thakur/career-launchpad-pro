@@ -5,7 +5,9 @@ import { Field } from "./field";
 import { ListItemShell } from "./list-item-shell";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { AiButton } from "@/components/ui/ai-button";
 import { Plus } from "lucide-react";
+import { suggestSkills } from "@/lib/ai-service";
 
 interface Props {
   data: ResumeData;
@@ -68,15 +70,42 @@ export function SkillsForm({ data, onChange }: Props) {
         </ListItemShell>
       ))}
 
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        className="w-full gap-1.5"
-        onClick={() => onChange((prev) => ({ ...prev, skills: [...prev.skills, emptyGroup()] }))}
-      >
-        <Plus className="size-4" /> Add skill group
-      </Button>
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="flex-1 gap-1.5"
+          onClick={() => onChange((prev) => ({ ...prev, skills: [...prev.skills, emptyGroup()] }))}
+        >
+          <Plus className="size-4" /> Add skill group
+        </Button>
+        <AiButton
+          variant="outline"
+          onClick={async () => {
+            const existingSkills = data.skills.flatMap((g) => g.items);
+            const suggestions = await suggestSkills({
+              title: data.personal.title,
+              existingSkills,
+            });
+            if (!suggestions.length) return;
+            // If there's already a group, append to the first one; otherwise create one
+            onChange((prev) => {
+              const skills = [...prev.skills];
+              if (skills.length === 0) {
+                skills.push({ id: makeId("skl"), category: "Skills", items: suggestions });
+              } else {
+                const first = skills[0]!;
+                const merged = [...new Set([...first.items, ...suggestions])];
+                skills[0] = { ...first, items: merged };
+              }
+              return { ...prev, skills };
+            });
+          }}
+        >
+          Suggest skills
+        </AiButton>
+      </div>
     </div>
   );
 }
