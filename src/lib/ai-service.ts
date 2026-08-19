@@ -5,7 +5,7 @@
  */
 
 const OPENROUTER_API_KEY = import.meta.env["VITE_OPENROUTER_API_KEY"] as string;
-const MODEL = "meta-llama/llama-3.3-70b-instruct:free";
+const MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free";
 const BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 async function callAI(systemPrompt: string, userMessage: string): Promise<string> {
