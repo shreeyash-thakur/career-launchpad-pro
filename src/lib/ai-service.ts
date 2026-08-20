@@ -1,19 +1,32 @@
 /**
  * OpenRouter AI service for resume writing assistance.
- * Uses meta-llama/llama-3.3-70b-instruct:free — best free model for
- * professional writing and structured suggestions.
+ *
+ * Free OpenRouter models sit in a shared pool other apps hit too, so 429s
+ * are common under load. To stay resilient we try a short list of good
+ * free models in order, retrying each one briefly on a 429 before falling
+ * through to the next model in the list.
  */
 
 import type { ResumeData } from "@/features/resume-builder/types";
 
 const OPENROUTER_API_KEY = import.meta.env["VITE_OPENROUTER_API_KEY"] as string;
-const MODEL = "z-ai/glm-5.2:free";
 const BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-async function callAI(systemPrompt: string, userMessage: string): Promise<string> {
-  if (!OPENROUTER_API_KEY) {
-    throw new Error("VITE_OPENROUTER_API_KEY is not set. Add it to your .env file.");
-  }
+// Ordered by quality; each is tried in turn if the previous one is
+// rate-limited or unavailable. Keep this list to well-established, higher
+// quality-score free models so a fallback never means a noticeably worse
+// result.
+const MODEL_CHAIN = [
+  "z-ai/glm-5.2:free",
+  "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "google/gemma-4-31b-it:free",
+] as const;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function callOnce(model: string, systemPrompt: string, userMessage: string) {
   const res = await fetch(BASE_URL, {
     method: "POST",
     headers: {
@@ -23,7 +36,7 @@ async function callAI(systemPrompt: string, userMessage: string): Promise<string
       "X-Title": "CareerGPT Resume Builder",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model,
       max_tokens: 600,
       temperature: 0.7,
       messages: [
@@ -32,16 +45,65 @@ async function callAI(systemPrompt: string, userMessage: string): Promise<string
       ],
     }),
   });
+  return res;
+}
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`AI request failed: ${res.status} — ${err}`);
+async function callAI(systemPrompt: string, userMessage: string): Promise<string> {
+  if (!OPENROUTER_API_KEY) {
+    throw new Error("VITE_OPENROUTER_API_KEY is not set. Add it to your .env file.");
   }
 
-  const data = await res.json();
-  const text = data.choices?.[0]?.message?.content?.trim();
-  if (!text) throw new Error("Empty response from AI.");
-  return text;
+  let lastError: Error | null = null;
+
+  for (const model of MODEL_CHAIN) {
+    // Up to 2 attempts per model: one immediate, one after a short backoff
+    // if we get rate-limited (matches the `retry_after_seconds` OpenRouter
+    // typically returns, which is usually just a few seconds).
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let res: Response;
+      try {
+        res = await callOnce(model, systemPrompt, userMessage);
+      } catch (err) {
+        // Network-level failure — try the next model rather than retrying
+        // the same one, in case that provider is fully down.
+        lastError = err instanceof Error ? err : new Error("Network error contacting AI provider.");
+        break;
+      }
+
+      if (res.ok) {
+        const data = await res.json();
+        const text = data.choices?.[0]?.message?.content?.trim();
+        if (!text) {
+          lastError = new Error("Empty response from AI.");
+          break; // try next model
+        }
+        return text;
+      }
+
+      if (res.status === 429 && attempt === 0) {
+        // Rate-limited — read the suggested wait time if present, then retry
+        // this same model once before giving up on it.
+        let waitMs = 3000;
+        try {
+          const body = await res.json();
+          const hinted = body?.error?.metadata?.retry_after_seconds;
+          if (typeof hinted === "number") waitMs = Math.min(hinted * 1000, 6000);
+        } catch {
+          // ignore parse failure, use default wait
+        }
+        await sleep(waitMs);
+        continue; // retry same model
+      }
+
+      // Any other error (or a second 429): stop retrying this model and
+      // fall through to the next one in the chain.
+      const errText = await res.text().catch(() => res.statusText);
+      lastError = new Error(`AI request failed: ${res.status} — ${errText}`);
+      break;
+    }
+  }
+
+  throw lastError ?? new Error("All AI providers are currently unavailable. Please try again shortly.");
 }
 
 /**
