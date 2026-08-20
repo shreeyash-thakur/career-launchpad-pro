@@ -7,7 +7,7 @@
 import type { ResumeData } from "@/features/resume-builder/types";
 
 const OPENROUTER_API_KEY = import.meta.env["VITE_OPENROUTER_API_KEY"] as string;
-const MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free";
+const MODEL = "z-ai/glm-5.2:free";
 const BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 async function callAI(systemPrompt: string, userMessage: string): Promise<string> {
@@ -42,6 +42,44 @@ async function callAI(systemPrompt: string, userMessage: string): Promise<string
   const text = data.choices?.[0]?.message?.content?.trim();
   if (!text) throw new Error("Empty response from AI.");
   return text;
+}
+
+/**
+ * Free models frequently ignore "return only JSON" and wrap the object in
+ * prose, markdown fences, or a leading sentence like "The resume...". This
+ * pulls out the first {...} or [...] block instead of assuming the whole
+ * string is clean JSON, and gives a clear error if none is found.
+ */
+function extractJSON<T>(raw: string): T {
+  let cleaned = raw.trim();
+  // Strip markdown code fences if present
+  cleaned = cleaned.replace(/```(?:json)?/gi, "").trim();
+
+  // If the whole string already parses, use it directly
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    // fall through to extraction
+  }
+
+  // Find the first balanced { ... } or [ ... ] block in the text
+  const objMatch = cleaned.match(/\{[\s\S]*\}/);
+  const arrMatch = cleaned.match(/\[[\s\S]*\]/);
+  const candidate = objMatch?.[0] ?? arrMatch?.[0];
+
+  if (!candidate) {
+    throw new Error(
+      "The AI didn't return a usable result — please try again.",
+    );
+  }
+
+  try {
+    return JSON.parse(candidate) as T;
+  } catch {
+    throw new Error(
+      "The AI's response couldn't be read — please try again.",
+    );
+  }
 }
 
 // ─── Professional Summary ────────────────────────────────────────────────────
@@ -143,7 +181,8 @@ export async function checkATSScore(params: {
   jobDescription: string;
 }): Promise<ATSResult> {
   const system = `You are an expert ATS (Applicant Tracking System) analyser and resume coach.
-Analyse how well a resume matches a job description and return ONLY a JSON object — no markdown, no explanation, no backticks.
+
+Respond with ONLY a single JSON object. Do not include any explanation, preamble, commentary, or markdown code fences before or after it. Your entire response must start with { and end with }.
 
 The JSON must follow this exact shape:
 {
@@ -163,17 +202,35 @@ Rules:
 - missingKeywords: up to 10 important skills/tools/qualifications from the JD missing from the resume
 - suggestions: 3–5 specific, actionable improvements — be concrete, name the exact section and fix
 - verdict: honest, specific, under 15 words
-- Return ONLY valid JSON`;
+- Output raw JSON only — no text before or after it`;
 
   const user = `Job Description:
 ${params.jobDescription.slice(0, 3000)}
 
 Resume:
-${params.resumeText.slice(0, 3000)}`;
+${params.resumeText.slice(0, 3000)}
+
+Remember: respond with ONLY the JSON object described in the system prompt.`;
 
   const raw = await callAI(system, user);
-  const cleaned = raw.replace(/```(?:json)?/g, "").trim();
-  return JSON.parse(cleaned) as ATSResult;
+  const parsed = extractJSON<Partial<ATSResult>>(raw);
+
+  // Normalise/validate shape so a partially-malformed response doesn't crash the UI
+  return {
+    score: typeof parsed.score === "number" ? Math.max(0, Math.min(100, Math.round(parsed.score))) : 0,
+    verdict: typeof parsed.verdict === "string" ? parsed.verdict : "Couldn't fully analyse the match — please try again.",
+    matchedKeywords: Array.isArray(parsed.matchedKeywords) ? parsed.matchedKeywords.map(String) : [],
+    missingKeywords: Array.isArray(parsed.missingKeywords) ? parsed.missingKeywords.map(String) : [],
+    suggestions: Array.isArray(parsed.suggestions)
+      ? parsed.suggestions
+          .filter((s): s is { section: string; issue: string; fix: string } => !!s && typeof s === "object")
+          .map((s) => ({
+            section: String(s.section ?? "General"),
+            issue: String(s.issue ?? ""),
+            fix: String(s.fix ?? ""),
+          }))
+      : [],
+  };
 }
 
 // ─── Resume to plain text ────────────────────────────────────────────────────
@@ -219,11 +276,10 @@ ${params.existingSkills?.length ? `Already has: ${params.existingSkills.join(", 
 
   const raw = await callAI(system, user);
   try {
-    const cleaned = raw.replace(/```(?:json)?/g, "").trim();
-    const parsed = JSON.parse(cleaned);
+    const parsed = extractJSON<unknown>(raw);
     if (Array.isArray(parsed)) return parsed.map(String).slice(0, 10);
   } catch {
-    // fallback: extract quoted words
+    // fallback: extract quoted words directly from the raw text
     return raw.match(/"([^"]+)"/g)?.map((s) => s.replace(/"/g, "")).slice(0, 10) ?? [];
   }
   return [];
