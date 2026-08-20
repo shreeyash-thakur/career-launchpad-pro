@@ -16,6 +16,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as ResumesIndexRouteImport } from './routes/resumes/index'
+import { Route as ResumesResumeIdAtsRouteImport } from './routes/resumes/$resumeId/ats'
 import { Route as ResumesResumeIdCheckRouteImport } from './routes/resumes/$resumeId/check'
 import { Route as ResumesResumeIdEditorRouteImport } from './routes/resumes/$resumeId/editor'
 import { Route as ResumesResumeIdQuestionnaireRouteImport } from './routes/resumes/$resumeId/questionnaire'
@@ -56,6 +57,11 @@ const ResumesIndexRoute = ResumesIndexRouteImport.update({
   path: '/resumes/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ResumesResumeIdAtsRoute = ResumesResumeIdAtsRouteImport.update({
+  id: '/resumes/$resumeId/ats',
+  path: '/resumes/$resumeId/ats',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResumesResumeIdCheckRoute = ResumesResumeIdCheckRouteImport.update({
   id: '/resumes/$resumeId/check',
   path: '/resumes/$resumeId/check',
@@ -86,6 +92,7 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRoute
   '/signup': typeof SignupRoute
   '/resumes/': typeof ResumesIndexRoute
+  '/resumes/$resumeId/ats': typeof ResumesResumeIdAtsRoute
   '/resumes/$resumeId/check': typeof ResumesResumeIdCheckRoute
   '/resumes/$resumeId/editor': typeof ResumesResumeIdEditorRoute
   '/resumes/$resumeId/questionnaire': typeof ResumesResumeIdQuestionnaireRoute
@@ -99,6 +106,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRoute
   '/signup': typeof SignupRoute
   '/resumes': typeof ResumesIndexRoute
+  '/resumes/$resumeId/ats': typeof ResumesResumeIdAtsRoute
   '/resumes/$resumeId/check': typeof ResumesResumeIdCheckRoute
   '/resumes/$resumeId/editor': typeof ResumesResumeIdEditorRoute
   '/resumes/$resumeId/questionnaire': typeof ResumesResumeIdQuestionnaireRoute
@@ -113,6 +121,7 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRoute
   '/signup': typeof SignupRoute
   '/resumes/': typeof ResumesIndexRoute
+  '/resumes/$resumeId/ats': typeof ResumesResumeIdAtsRoute
   '/resumes/$resumeId/check': typeof ResumesResumeIdCheckRoute
   '/resumes/$resumeId/editor': typeof ResumesResumeIdEditorRoute
   '/resumes/$resumeId/questionnaire': typeof ResumesResumeIdQuestionnaireRoute
@@ -128,6 +137,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/signup'
     | '/resumes/'
+    | '/resumes/$resumeId/ats'
     | '/resumes/$resumeId/check'
     | '/resumes/$resumeId/editor'
     | '/resumes/$resumeId/questionnaire'
@@ -141,6 +151,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/signup'
     | '/resumes'
+    | '/resumes/$resumeId/ats'
     | '/resumes/$resumeId/check'
     | '/resumes/$resumeId/editor'
     | '/resumes/$resumeId/questionnaire'
@@ -154,6 +165,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/signup'
     | '/resumes/'
+    | '/resumes/$resumeId/ats'
     | '/resumes/$resumeId/check'
     | '/resumes/$resumeId/editor'
     | '/resumes/$resumeId/questionnaire'
@@ -168,6 +180,7 @@ export interface RootRouteChildren {
   OnboardingRoute: typeof OnboardingRoute
   SignupRoute: typeof SignupRoute
   ResumesIndexRoute: typeof ResumesIndexRoute
+  ResumesResumeIdAtsRoute: typeof ResumesResumeIdAtsRoute
   ResumesResumeIdCheckRoute: typeof ResumesResumeIdCheckRoute
   ResumesResumeIdEditorRoute: typeof ResumesResumeIdEditorRoute
   ResumesResumeIdQuestionnaireRoute: typeof ResumesResumeIdQuestionnaireRoute
@@ -225,6 +238,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResumesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/resumes/$resumeId/ats': {
+      id: '/resumes/$resumeId/ats'
+      path: '/resumes/$resumeId/ats'
+      fullPath: '/resumes/$resumeId/ats'
+      preLoaderRoute: typeof ResumesResumeIdAtsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/resumes/$resumeId/check': {
       id: '/resumes/$resumeId/check'
       path: '/resumes/$resumeId/check'
@@ -264,6 +284,7 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingRoute: OnboardingRoute,
   SignupRoute: SignupRoute,
   ResumesIndexRoute: ResumesIndexRoute,
+  ResumesResumeIdAtsRoute: ResumesResumeIdAtsRoute,
   ResumesResumeIdCheckRoute: ResumesResumeIdCheckRoute,
   ResumesResumeIdEditorRoute: ResumesResumeIdEditorRoute,
   ResumesResumeIdQuestionnaireRoute: ResumesResumeIdQuestionnaireRoute,

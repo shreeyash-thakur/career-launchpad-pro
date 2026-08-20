@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useParams } from "@tanstack/react-router";
 import {
   Redo2,
   Undo2,
@@ -10,6 +10,7 @@ import {
   Check,
   Loader2,
   MoreVertical,
+  FileSearch,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -62,6 +63,7 @@ export function BuilderToolbar({
 }: Props) {
   const importRef = useRef<HTMLInputElement>(null);
   const [startOverOpen, setStartOverOpen] = useState(false);
+  const { resumeId } = useParams({ from: "/resumes/$resumeId/editor" });
   const { ExportSurface, download, exporting } = useResumeExport(
     data,
     style,
@@ -160,6 +162,16 @@ export function BuilderToolbar({
           <Button
             variant="outline"
             size="sm"
+            className="gap-1.5 text-xs border-primary/30 text-primary hover:bg-primary/5"
+            asChild
+          >
+            <Link to="/resumes/$resumeId/ats" params={{ resumeId }}>
+              <FileSearch className="size-3.5" /> ATS Score
+            </Link>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             className="gap-1.5 text-xs"
             onClick={() => importRef.current?.click()}
           >
@@ -195,6 +207,11 @@ export function BuilderToolbar({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem asChild className="gap-2">
+              <Link to="/resumes/$resumeId/ats" params={{ resumeId }}>
+                <FileSearch className="size-3.5" /> ATS Score
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => importRef.current?.click()} className="gap-2">
               <Upload className="size-3.5" /> Import JSON
             </DropdownMenuItem>

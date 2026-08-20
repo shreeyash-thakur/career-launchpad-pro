@@ -4,6 +4,8 @@
  * professional writing and structured suggestions.
  */
 
+import type { ResumeData } from "@/features/resume-builder/types";
+
 const OPENROUTER_API_KEY = import.meta.env["VITE_OPENROUTER_API_KEY"] as string;
 const MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free";
 const BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -126,7 +128,78 @@ ${params.existingDescription ? `Existing description (improve it): ${params.exis
   return callAI(system, user);
 }
 
-// ─── Skills Suggestions ──────────────────────────────────────────────────────
+// ─── ATS Score Checker ───────────────────────────────────────────────────────
+
+export interface ATSResult {
+  score: number; // 0–100
+  verdict: string; // one-line summary e.g. "Strong match — a few keywords missing"
+  matchedKeywords: string[]; // keywords from JD found in resume
+  missingKeywords: string[]; // important JD keywords absent from resume
+  suggestions: { section: string; issue: string; fix: string }[]; // actionable fixes
+}
+
+export async function checkATSScore(params: {
+  resumeText: string;
+  jobDescription: string;
+}): Promise<ATSResult> {
+  const system = `You are an expert ATS (Applicant Tracking System) analyser and resume coach.
+Analyse how well a resume matches a job description and return ONLY a JSON object — no markdown, no explanation, no backticks.
+
+The JSON must follow this exact shape:
+{
+  "score": <integer 0-100>,
+  "verdict": "<one sentence summary of the match>",
+  "matchedKeywords": ["<keyword>", ...],
+  "missingKeywords": ["<keyword>", ...],
+  "suggestions": [
+    { "section": "<section name>", "issue": "<what is wrong>", "fix": "<specific fix>" },
+    ...
+  ]
+}
+
+Rules:
+- score: weight keyword matches (50%), quantified achievements (20%), relevant experience (20%), formatting/completeness (10%)
+- matchedKeywords: up to 12 specific skills/tools/qualifications from the JD that appear in the resume
+- missingKeywords: up to 10 important skills/tools/qualifications from the JD missing from the resume
+- suggestions: 3–5 specific, actionable improvements — be concrete, name the exact section and fix
+- verdict: honest, specific, under 15 words
+- Return ONLY valid JSON`;
+
+  const user = `Job Description:
+${params.jobDescription.slice(0, 3000)}
+
+Resume:
+${params.resumeText.slice(0, 3000)}`;
+
+  const raw = await callAI(system, user);
+  const cleaned = raw.replace(/```(?:json)?/g, "").trim();
+  return JSON.parse(cleaned) as ATSResult;
+}
+
+// ─── Resume to plain text ────────────────────────────────────────────────────
+
+export function resumeToText(data: ResumeData): string {
+  const lines: string[] = [];
+  const p = data.personal;
+  lines.push(p.fullName, p.title, p.email, p.phone, p.location, p.linkedin, p.github, p.website);
+  if (data.summary) lines.push(data.summary);
+  for (const exp of data.experience) {
+    lines.push(`${exp.role} at ${exp.company}`, ...exp.bullets);
+  }
+  for (const edu of data.education) {
+    lines.push(`${edu.degree} ${edu.field} at ${edu.school}`, edu.details);
+  }
+  for (const sg of data.skills) {
+    lines.push(sg.category, sg.items.join(", "));
+  }
+  for (const proj of data.projects) {
+    lines.push(proj.name, proj.description, proj.tech.join(", "));
+  }
+  for (const cert of data.certifications) {
+    lines.push(`${cert.name} — ${cert.issuer}`);
+  }
+  return lines.filter(Boolean).join("\n");
+}
 
 export async function suggestSkills(params: {
   title: string;
