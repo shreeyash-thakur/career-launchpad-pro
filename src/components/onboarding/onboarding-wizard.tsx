@@ -12,7 +12,7 @@ import {
   Award,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, stripUndefined } from "@/lib/utils";
 import { TEMPLATES, getTemplate } from "@/features/resume-builder/templates";
 import { useAuth } from "@/context/auth-context";
 import { ResumeService } from "@/lib/resume-service";
@@ -332,11 +332,11 @@ export function OnboardingWizard() {
     setTimeout(() => {
       void navigate({
         to: "/builder",
-        search: {
+        search: stripUndefined({
           resumeId: targetResumeId,
           template: templateId,
           fromOnboarding: "1",
-        },
+        }),
       });
     }, 400);
   };

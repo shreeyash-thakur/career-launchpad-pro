@@ -1,5 +1,5 @@
 import type { ResumeData, ResumeStyle } from "@/features/resume-builder/types";
-import { createResume, updateResume } from "@/lib/resume-service";
+import { createResume } from "@/lib/resume-service";
 import { defaultStyle } from "@/features/resume-builder/sample-data";
 
 const DATA_KEY = "resume-builder:data:v1";
@@ -61,12 +61,16 @@ export async function migrateLocalResume(uid: string): Promise<string | null> {
   }
 
   try {
-    // Create a new Firestore resume with the local data.
-    const resume = await createResume(uid, local.data.personal.fullName || "My Resume");
-    await updateResume(resume.id, uid, {
+    // Create a new Firestore resume seeded with the local data directly,
+    // rather than creating an empty resume and immediately overwriting it.
+    const templateId = local.style?.templateId ?? "modern";
+    const resume = await createResume(uid, {
+      title: local.data.personal.fullName
+        ? `${local.data.personal.fullName}'s Resume`
+        : "My Resume",
       resumeData: local.data,
-      style: local.style,
-      templateId: local.style?.templateId ?? "modern",
+      resumeStyle: local.style,
+      templateId,
       questionnaireCompleted: true,
       questionnaireVersion: 1,
     });

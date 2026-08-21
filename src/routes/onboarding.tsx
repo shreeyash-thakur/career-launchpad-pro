@@ -1,15 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
+import { stripUndefined } from "@/lib/utils";
 
 export const Route = createFileRoute("/onboarding")({
   validateSearch: (
     search: Record<string, unknown>,
-  ): { resumeId?: string; fromDashboard?: string } => ({
-    resumeId: typeof search["resumeId"] === "string" ? search["resumeId"] : undefined,
-    fromDashboard:
-      typeof search["fromDashboard"] === "string" ? search["fromDashboard"] : undefined,
-  }),
+  ): { resumeId?: string; fromDashboard?: string } =>
+    stripUndefined({
+      resumeId: typeof search["resumeId"] === "string" ? search["resumeId"] : undefined,
+      fromDashboard:
+        typeof search["fromDashboard"] === "string" ? search["fromDashboard"] : undefined,
+    }),
   head: () => ({
     meta: [
       { title: "Get Started — PeasiProfile" },

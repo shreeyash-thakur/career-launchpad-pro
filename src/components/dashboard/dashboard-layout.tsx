@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Shield,
   Loader2,
+  FileSearch,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/auth-context";
@@ -23,11 +24,12 @@ import { DashboardOverview } from "./dashboard-overview";
 import { MyResumesView } from "./my-resumes-view";
 import { TemplatesView } from "./templates-view";
 import { AiToolsView } from "./ai-tools-view";
+import { AtsCheckerView } from "./ats-checker-view";
 import { ProfileView } from "./profile-view";
 import { SettingsView } from "./settings-view";
 import { cn } from "@/lib/utils";
 
-type TabKey = "overview" | "resumes" | "templates" | "ai-tools" | "profile" | "settings";
+type TabKey = "overview" | "resumes" | "templates" | "ats" | "ai-tools" | "profile" | "settings";
 
 interface Props {
   initialTab?: string;
@@ -41,6 +43,7 @@ export function DashboardLayout({ initialTab }: Props) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [resumes, setResumes] = useState<FirestoreResume[]>([]);
   const [loadingResumes, setLoadingResumes] = useState(true);
+  const [atsPreselectId, setAtsPreselectId] = useState<string | undefined>(undefined);
 
   const fetchResumes = useCallback(async () => {
     if (!user?.uid) {
@@ -63,6 +66,16 @@ export function DashboardLayout({ initialTab }: Props) {
       void fetchResumes();
     }
   }, [authLoading, fetchResumes]);
+
+  // initialTab only reflects the URL at first mount; if the user is already
+  // on /dashboard and clicks an in-app link to /dashboard?tab=X, React
+  // Router re-renders this component without remounting it, so the
+  // activeTab useState initializer won't re-run. This keeps them in sync.
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab as TabKey);
+    }
+  }, [initialTab]);
 
   const handleCreateNewResume = async () => {
     if (!user?.uid) {
@@ -87,17 +100,23 @@ export function DashboardLayout({ initialTab }: Props) {
     }
   };
 
-  const navItems = [
+  const navItems: {
+    key: TabKey;
+    label: string;
+    icon: typeof LayoutDashboard;
+    badge?: number;
+  }[] = [
     { key: "overview", label: "Dashboard", icon: LayoutDashboard },
     {
       key: "resumes",
       label: "My Resumes",
       icon: FileText,
-      badge: resumes.length > 0 ? resumes.length : undefined,
+      ...(resumes.length > 0 ? { badge: resumes.length } : {}),
     },
     { key: "templates", label: "Templates", icon: Layout },
+    { key: "ats", label: "ATS Score Checker", icon: FileSearch },
     { key: "ai-tools", label: "AI Career Tools", icon: Bot },
-  ] as const;
+  ];
 
   const secondaryNavItems = [
     { key: "profile", label: "Profile", icon: User },
@@ -345,10 +364,18 @@ export function DashboardLayout({ initialTab }: Props) {
               resumes={resumes}
               onRefresh={fetchResumes}
               onCreateNew={handleCreateNewResume}
+              onNavigateToAts={(resumeId) => {
+                setAtsPreselectId(resumeId);
+                setActiveTab("ats");
+              }}
             />
           )}
 
           {activeTab === "templates" && <TemplatesView onRefreshResumes={fetchResumes} />}
+
+          {activeTab === "ats" && (
+            <AtsCheckerView resumes={resumes} {...(atsPreselectId ? { preselectId: atsPreselectId } : {})} />
+          )}
 
           {activeTab === "ai-tools" && <AiToolsView />}
 

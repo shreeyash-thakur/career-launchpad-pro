@@ -47,8 +47,8 @@ export function CtaBanner() {
                 void createResume(user.uid)
                   .then((resume) => {
                     void navigate({
-                      to: "/resumes/$resumeId/questionnaire",
-                      params: { resumeId: resume.id },
+                      to: "/onboarding",
+                      search: { resumeId: resume.id },
                     });
                   })
                   .catch((err) => {

@@ -29,6 +29,7 @@ import { Sparkles, X, AlertTriangle, ArrowLeft, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { ResumeService, type FirestoreResume } from "@/lib/resume-service";
 import { Button } from "@/components/ui/button";
+import { stripUndefined } from "@/lib/utils";
 
 export const Route = createFileRoute("/builder")({
   head: () => ({
@@ -43,12 +44,13 @@ export const Route = createFileRoute("/builder")({
   }),
   validateSearch: (
     search: Record<string, unknown>,
-  ): { template?: string; fromOnboarding?: string; resumeId?: string } => ({
-    template: typeof search["template"] === "string" ? search["template"] : undefined,
-    fromOnboarding:
-      typeof search["fromOnboarding"] === "string" ? search["fromOnboarding"] : undefined,
-    resumeId: typeof search["resumeId"] === "string" ? search["resumeId"] : undefined,
-  }),
+  ): { template?: string; fromOnboarding?: string; resumeId?: string } =>
+    stripUndefined({
+      template: typeof search["template"] === "string" ? search["template"] : undefined,
+      fromOnboarding:
+        typeof search["fromOnboarding"] === "string" ? search["fromOnboarding"] : undefined,
+      resumeId: typeof search["resumeId"] === "string" ? search["resumeId"] : undefined,
+    }),
   component: BuilderPage,
 });
 
@@ -105,11 +107,13 @@ function BuilderPage() {
     };
   }, [search.resumeId, user?.uid, authLoading]);
 
-  const store = useResumeStore({
-    resumeId: search.resumeId,
-    userId: user?.uid,
-    initialResume: loadedResume,
-  });
+  const store = useResumeStore(
+    stripUndefined({
+      resumeId: search.resumeId,
+      userId: user?.uid,
+      initialResume: loadedResume,
+    }),
+  );
 
   const { title, setTitle, data, setData, style, setStyle } = store;
 

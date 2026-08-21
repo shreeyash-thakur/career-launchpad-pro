@@ -126,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     setLoading(false);
+    return undefined;
   }, []);
 
   const openAuthModal = useCallback((onSuccess?: () => void) => {
@@ -276,7 +277,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const fbAuth = getFirebaseAuth();
       if (fbAuth.currentUser) {
-        await updateProfile(fbAuth.currentUser, { displayName, photoURL });
+        await updateProfile(fbAuth.currentUser, { displayName, photoURL: photoURL ?? null });
       }
     } catch {}
     setUser((prev) => {
