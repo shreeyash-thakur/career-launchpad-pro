@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ResumeData, ResumeStyle } from "../types";
 import { defaultStyle, sampleResume } from "../sample-data";
+import { ResumeService, type FirestoreResume } from "@/lib/resume-service";
 
-const DATA_KEY = "resume-builder:data:v1";
-const STYLE_KEY = "resume-builder:style:v1";
+const DATA_KEY = "peasiprofile:builder:data:v1";
+const STYLE_KEY = "peasiprofile:builder:style:v1";
+const TITLE_KEY = "peasiprofile:builder:title:v1";
 const HISTORY_LIMIT = 40;
 
 function readStorage<T>(key: string, fallback: T): T {
@@ -19,35 +21,49 @@ function readStorage<T>(key: string, fallback: T): T {
 
 export type SaveStatus = "idle" | "saving" | "saved";
 
-/** Backfills fields added after a résumé may have been saved, so old saved data keeps working. */
-function migrateData(data: ResumeData): ResumeData {
-  if (data.hiddenSections) return data;
-  return { ...data, hiddenSections: [] };
+export interface UseResumeStoreOptions {
+  resumeId?: string;
+  userId?: string;
+  initialResume?: FirestoreResume | null;
 }
 
-/** Backfills style fields added after a style may have been saved. */
-function migrateStyle(style: ResumeStyle): ResumeStyle {
-  if (style.bulletStyle && style.sectionDividers) return style;
-  return {
-    ...style,
-    bulletStyle: style.bulletStyle ?? "template",
-    sectionDividers: style.sectionDividers ?? "template",
-  };
-}
+export function useResumeStore(options: UseResumeStoreOptions = {}) {
+  const { resumeId, userId, initialResume } = options;
 
-export function useResumeStore() {
-  const [data, setDataState] = useState<ResumeData>(() =>
-    migrateData(readStorage(DATA_KEY, sampleResume())),
-  );
-  const [style, setStyleState] = useState<ResumeStyle>(() =>
-    migrateStyle(readStorage(STYLE_KEY, defaultStyle())),
-  );
+  const [title, setTitleState] = useState<string>(() => {
+    if (initialResume?.title) return initialResume.title;
+    return readStorage(TITLE_KEY, "My Professional Resume");
+  });
+
+  const [data, setDataState] = useState<ResumeData>(() => {
+    if (initialResume?.resumeData) return initialResume.resumeData;
+    return readStorage(DATA_KEY, sampleResume());
+  });
+
+  const [style, setStyleState] = useState<ResumeStyle>(() => {
+    if (initialResume?.resumeStyle) return initialResume.resumeStyle;
+    return readStorage(STYLE_KEY, defaultStyle());
+  });
+
   const [status, setStatus] = useState<SaveStatus>("idle");
 
   const undoStack = useRef<ResumeData[]>([]);
   const redoStack = useRef<ResumeData[]>([]);
   const skipHistory = useRef(false);
   const [, forceRender] = useState(0);
+
+  // Sync if initialResume loads asynchronously
+  useEffect(() => {
+    if (initialResume) {
+      if (initialResume.title) setTitleState(initialResume.title);
+      if (initialResume.resumeData) setDataState(initialResume.resumeData);
+      if (initialResume.resumeStyle) setStyleState(initialResume.resumeStyle);
+    }
+  }, [initialResume]);
+
+  const setTitle = useCallback((newTitle: string) => {
+    setTitleState(newTitle);
+  }, []);
 
   const setData = useCallback((updater: ResumeData | ((prev: ResumeData) => ResumeData)) => {
     setDataState((prev) => {
@@ -103,22 +119,38 @@ export function useResumeStore() {
     [setData],
   );
 
-  // Debounced autosave.
+  // Debounced autosave to Local Storage and Firestore
   useEffect(() => {
     setStatus("saving");
-    const t = setTimeout(() => {
+    const t = setTimeout(async () => {
       try {
-        window.localStorage.setItem(DATA_KEY, JSON.stringify(data));
-        window.localStorage.setItem(STYLE_KEY, JSON.stringify(style));
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(TITLE_KEY, JSON.stringify(title));
+          window.localStorage.setItem(DATA_KEY, JSON.stringify(data));
+          window.localStorage.setItem(STYLE_KEY, JSON.stringify(style));
+        }
+
+        if (resumeId && userId) {
+          await ResumeService.updateResume(resumeId, userId, {
+            title,
+            templateId: style.templateId,
+            resumeData: data,
+            resumeStyle: style,
+          });
+        }
         setStatus("saved");
-      } catch {
+      } catch (err) {
+        console.warn("Autosave notice:", err);
         setStatus("idle");
       }
     }, 500);
+
     return () => clearTimeout(t);
-  }, [data, style]);
+  }, [data, style, title, resumeId, userId]);
 
   return {
+    title,
+    setTitle,
     data,
     setData,
     style,

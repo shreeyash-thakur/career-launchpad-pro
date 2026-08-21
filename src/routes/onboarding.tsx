@@ -3,9 +3,16 @@ import { ProtectedRoute } from "@/components/auth/protected-route";
 import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
 
 export const Route = createFileRoute("/onboarding")({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { resumeId?: string; fromDashboard?: string } => ({
+    resumeId: typeof search["resumeId"] === "string" ? search["resumeId"] : undefined,
+    fromDashboard:
+      typeof search["fromDashboard"] === "string" ? search["fromDashboard"] : undefined,
+  }),
   head: () => ({
     meta: [
-      { title: "Get Started — CareerGPT" },
+      { title: "Get Started — PeasiProfile" },
       {
         name: "description",
         content:
@@ -27,7 +34,7 @@ function OnboardingPage() {
 function OnboardingContent() {
   return (
     <div className="relative min-h-dvh bg-background">
-      {/* Ambient background blobs */}
+      {/* Ambient background glow */}
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute inset-0 bg-background" />
         <div

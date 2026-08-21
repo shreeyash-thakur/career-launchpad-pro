@@ -1,52 +1,37 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useScroll, useMotionValueEvent } from "motion/react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LogOut, Menu, Sparkles, User as UserIcon, X } from "lucide-react";
+import {
+  Menu,
+  Sparkles,
+  X,
+  User,
+  LayoutDashboard,
+  FileText,
+  Bot,
+  LogOut,
+  Plus,
+  ChevronDown,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { NAV_LINKS } from "@/constants/landing";
 import { silk } from "@/animations/variants";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
-
-function initialsFor(name: string | null, email: string | null): string {
-  if (name?.trim()) {
-    return name
-      .trim()
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase())
-      .join("");
-  }
-  return email?.[0]?.toUpperCase() ?? "U";
-}
+import { useAuth } from "@/context/auth-context";
 
 export function Navbar() {
+  const { user, openAuthModal, signOut } = useAuth();
+  const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const { scrollY } = useScroll();
-  const { user, loading, logOut } = useAuth();
-  const navigate = useNavigate();
-
-  const handleLogOut = async () => {
-    try {
-      await logOut();
-      toast.success("Logged out");
-      setOpen(false);
-      void navigate({ to: "/" });
-    } catch {
-      toast.error("Couldn't log out. Please try again.");
-    }
-  };
 
   useMotionValueEvent(scrollY, "change", (v) => setScrolled(v > 24));
 
@@ -56,6 +41,16 @@ export function Navbar() {
       document.body.style.overflow = "";
     };
   }, [open]);
+
+  const handleStartBuilding = () => {
+    if (!user) {
+      openAuthModal(() => {
+        void navigate({ to: "/onboarding" });
+      });
+    } else {
+      void navigate({ to: "/onboarding" });
+    }
+  };
 
   return (
     <motion.header
@@ -72,12 +67,13 @@ export function Navbar() {
         )}
       >
         <Link to="/" className="flex items-center gap-2 font-display text-base font-semibold">
-          <span className="flex size-8 items-center justify-center rounded-xl bg-[image:var(--gradient-emerald)] text-primary-foreground">
+          <span className="flex size-8 items-center justify-center rounded-xl bg-[image:var(--gradient-emerald)] text-primary-foreground shadow-[var(--shadow-glow)]">
             <Sparkles className="size-4" />
           </span>
-          CareerGPT
+          <span className="font-bold">PeasiProfile</span>
         </Link>
 
+        {/* Desktop Links */}
         <ul className="hidden items-center gap-1 md:flex">
           {NAV_LINKS.map((link) => (
             <li key={link.href}>
@@ -89,52 +85,105 @@ export function Navbar() {
               </a>
             </li>
           ))}
+          {user && (
+            <li>
+              <Link
+                to="/dashboard"
+                className="rounded-lg px-3 py-2 text-sm font-semibold text-primary transition-colors hover:text-primary/80 flex items-center gap-1.5"
+              >
+                <LayoutDashboard className="size-4" />
+                My Dashboard
+              </Link>
+            </li>
+          )}
         </ul>
 
+        {/* Right Actions */}
         <div className="hidden items-center gap-2 md:flex">
-          {!loading && user ? (
+          {!user ? (
             <>
-              <Button variant="hero" size="sm" className="rounded-lg" asChild>
-                <Link to="/resumes">My Resumes</Link>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs font-semibold"
+                onClick={() => openAuthModal()}
+              >
+                Log In
               </Button>
+              <Button
+                variant="hero"
+                size="sm"
+                className="rounded-xl shadow-[var(--shadow-glow)] text-xs font-semibold gap-1.5"
+                onClick={handleStartBuilding}
+              >
+                <Sparkles className="size-3.5" />
+                Create My Resume
+              </Button>
+            </>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="hero"
+                size="sm"
+                className="rounded-xl shadow-[var(--shadow-glow)] text-xs font-semibold gap-1.5"
+                asChild
+              >
+                <Link to="/onboarding">
+                  <Plus className="size-3.5" />
+                  Create Resume
+                </Link>
+              </Button>
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button
-                    className="ml-1 rounded-full transition-opacity hover:opacity-80"
-                    aria-label="Account menu"
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl gap-2 text-xs font-medium pl-2 pr-3"
                   >
-                    <Avatar className="size-9 border border-border">
-                      <AvatarImage src={user.photoURL ?? undefined} alt={user.displayName ?? ""} />
-                      <AvatarFallback className="bg-[image:var(--gradient-emerald)] text-xs font-semibold text-primary-foreground">
-                        {initialsFor(user.displayName, user.email)}
-                      </AvatarFallback>
-                    </Avatar>
-                  </button>
+                    <div className="flex size-6 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-[11px]">
+                      {user.displayName ? user.displayName.charAt(0).toUpperCase() : "U"}
+                    </div>
+                    <span className="max-w-[90px] truncate">{user.displayName || "Account"}</span>
+                    <ChevronDown className="size-3 text-muted-foreground" />
+                  </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 rounded-xl">
-                  <DropdownMenuLabel className="truncate">
-                    {user.displayName || user.email}
-                  </DropdownMenuLabel>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem asChild className="gap-2 text-xs">
+                    <Link to="/dashboard">
+                      <LayoutDashboard className="size-3.5" /> Dashboard
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="gap-2 text-xs">
+                    <Link to="/dashboard" search={{ tab: "resumes" }}>
+                      <FileText className="size-3.5" /> My Resumes
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="gap-2 text-xs">
+                    <Link to="/dashboard" search={{ tab: "ai-tools" }}>
+                      <Bot className="size-3.5" /> AI Career Tools
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => void handleLogOut()} className="gap-2">
-                    <LogOut className="size-4" />
-                    Log out
+                  <DropdownMenuItem asChild className="gap-2 text-xs">
+                    <Link to="/dashboard" search={{ tab: "profile" }}>
+                      <User className="size-3.5" /> Profile &amp; Settings
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => void signOut()}
+                    className="gap-2 text-xs text-destructive focus:text-destructive"
+                  >
+                    <LogOut className="size-3.5" /> Log Out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </>
-          ) : (
-            <>
-              <Button variant="ghost" size="sm" className="rounded-lg" asChild>
-                <Link to="/login">Log in</Link>
-              </Button>
-              <Button variant="hero" size="sm" className="rounded-lg" asChild>
-                <Link to="/signup">Sign up free</Link>
-              </Button>
-            </>
+            </div>
           )}
         </div>
 
+        {/* Mobile Hamburger */}
         <Button
           variant="glass"
           size="icon"
@@ -147,6 +196,7 @@ export function Navbar() {
         </Button>
       </nav>
 
+      {/* Mobile Drawer */}
       <AnimatePresence>
         {open ? (
           <motion.div
@@ -162,48 +212,71 @@ export function Navbar() {
                   <a
                     href={link.href}
                     onClick={() => setOpen(false)}
-                    className="block rounded-lg px-3 py-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                    className="block rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                   >
                     {link.label}
                   </a>
                 </li>
               ))}
-            </ul>
-            <div className="mt-3 flex flex-col gap-2">
-              {user ? (
-                <Button variant="hero" className="w-full rounded-xl" asChild>
-                  <Link to="/resumes" onClick={() => setOpen(false)}>
-                    My Resumes
+              {user && (
+                <li>
+                  <Link
+                    to="/dashboard"
+                    onClick={() => setOpen(false)}
+                    className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-primary hover:bg-secondary"
+                  >
+                    <LayoutDashboard className="size-4" />
+                    My Dashboard
                   </Link>
-                </Button>
-              ) : (
-                <Button variant="hero" className="w-full rounded-xl" asChild>
-                  <Link to="/login" onClick={() => setOpen(false)}>
-                    Build my resume
-                  </Link>
-                </Button>
+                </li>
               )}
-              {!loading && user ? (
-                <Button
-                  variant="glass"
-                  className="w-full gap-2 rounded-xl"
-                  onClick={() => void handleLogOut()}
-                >
-                  <LogOut className="size-4" />
-                  Log out ({user.displayName || user.email})
-                </Button>
+            </ul>
+
+            <div className="mt-4 flex flex-col gap-2 pt-3 border-t border-border/60">
+              {!user ? (
+                <>
+                  <Button
+                    variant="outline"
+                    className="w-full rounded-xl text-xs font-semibold"
+                    onClick={() => {
+                      setOpen(false);
+                      openAuthModal();
+                    }}
+                  >
+                    Log In
+                  </Button>
+                  <Button
+                    variant="hero"
+                    className="w-full rounded-xl text-xs font-semibold shadow-[var(--shadow-glow)]"
+                    onClick={() => {
+                      setOpen(false);
+                      handleStartBuilding();
+                    }}
+                  >
+                    Create My Resume
+                  </Button>
+                </>
               ) : (
                 <>
-                  <Button variant="glass" className="w-full rounded-xl" asChild>
-                    <Link to="/login" onClick={() => setOpen(false)}>
-                      <UserIcon className="size-4" />
-                      Log in
+                  <Button
+                    variant="hero"
+                    className="w-full rounded-xl text-xs font-semibold"
+                    asChild
+                  >
+                    <Link to="/onboarding" onClick={() => setOpen(false)}>
+                      <Plus className="size-3.5 mr-1.5" />
+                      Create New Resume
                     </Link>
                   </Button>
-                  <Button variant="outline" className="w-full rounded-xl" asChild>
-                    <Link to="/signup" onClick={() => setOpen(false)}>
-                      Sign up free
-                    </Link>
+                  <Button
+                    variant="ghost"
+                    className="w-full rounded-xl text-xs text-destructive hover:bg-destructive/10"
+                    onClick={() => {
+                      setOpen(false);
+                      void signOut();
+                    }}
+                  >
+                    Log Out
                   </Button>
                 </>
               )}

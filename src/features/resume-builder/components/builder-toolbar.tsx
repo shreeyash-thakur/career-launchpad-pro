@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import {
+  Download,
   Redo2,
   Undo2,
   FileJson,
@@ -9,10 +10,12 @@ import {
   Sparkles,
   Check,
   Loader2,
-  MoreVertical,
-  FileSearch,
+  LayoutDashboard,
+  CloudCheck,
+  Edit2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,21 +25,17 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import type { ResumeData, ResumeStyle } from "../types";
 import type { SaveStatus } from "../hooks/use-resume-store";
-import { downloadJson, readJsonFile } from "../utils/export";
-import { useResumeExport } from "./resume-export-surface";
-import { DownloadMenu } from "./download-menu";
-import { toast } from "sonner";
+import { downloadJson, printResume, readJsonFile } from "../utils/export";
+import { calculateResumeCompletion } from "../utils/completion";
+import { ResumeReadyModal } from "./resume-ready-modal";
 
 interface Props {
+  title: string;
+  onTitleChange: (title: string) => void;
   data: ResumeData;
   style: ResumeStyle;
   status: SaveStatus;
@@ -47,9 +46,12 @@ interface Props {
   onReplaceData: (data: ResumeData) => void;
   onResetBlank: () => void;
   onResetSample: () => void;
+  isCloudSynced?: boolean;
 }
 
 export function BuilderToolbar({
+  title,
+  onTitleChange,
   data,
   style,
   status,
@@ -60,28 +62,13 @@ export function BuilderToolbar({
   onReplaceData,
   onResetBlank,
   onResetSample,
+  isCloudSynced = false,
 }: Props) {
   const importRef = useRef<HTMLInputElement>(null);
-  const [startOverOpen, setStartOverOpen] = useState(false);
-  const { resumeId } = useParams({ from: "/resumes/$resumeId/editor" });
-  const { ExportSurface, download, exporting } = useResumeExport(
-    data,
-    style,
-    data.personal.fullName || "resume",
-  );
+  const [readyModalOpen, setReadyModalOpen] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
 
-  async function handleDownload(format: Parameters<typeof download>[0]) {
-    try {
-      await download(format);
-    } catch (err) {
-      console.error("Failed to export resume:", err);
-      const message =
-        err instanceof Error && /render|generate/i.test(err.message)
-          ? err.message
-          : "Couldn't generate the download. Please try again.";
-      toast.error(message);
-    }
-  }
+  const completion = calculateResumeCompletion(data);
 
   async function handleImport(file: File | undefined) {
     if (!file) return;
@@ -91,165 +78,199 @@ export function BuilderToolbar({
         onReplaceData(parsed);
       }
     } catch {
-      // Silently ignore malformed files; a toast system could surface this.
+      // Silently ignore
     }
   }
 
-  const statusLabel =
-    status === "saving" ? "Saving…" : status === "saved" ? "Saved to cloud" : "Autosave on";
+  const handleDownload = () => {
+    printResume(style.pageSize);
+    // Show resume ready modal
+    setTimeout(() => {
+      setReadyModalOpen(true);
+    }, 400);
+  };
 
   return (
-    <div className="no-print flex items-center justify-between gap-2 border-b border-border bg-background/80 px-3 py-2.5 backdrop-blur sm:gap-3 sm:px-4 sm:py-3">
-      <Link to="/" className="flex shrink-0 items-center gap-2 font-display text-sm font-semibold">
-        <span className="flex size-7 items-center justify-center rounded-lg bg-[image:var(--gradient-emerald)] text-primary-foreground">
-          <Sparkles className="size-3.5" />
-        </span>
-        <span className="hidden sm:inline">CareerGPT</span>
-      </Link>
-
-      <div className="hidden flex-1 items-center justify-center gap-1 text-xs text-muted-foreground sm:flex">
-        {status === "saving" ? (
-          <Loader2 className="size-3.5 animate-spin" />
-        ) : (
-          <Check className="size-3.5 text-emerald-600" />
-        )}
-        {statusLabel}
-      </div>
-
-      <input
-        ref={importRef}
-        type="file"
-        accept="application/json"
-        className="hidden"
-        onChange={(e) => handleImport(e.target.files?.[0])}
-      />
-
-      {/* Compact status pill on phones, where there's no room for the centered label above. */}
-      <div className="flex items-center gap-1 text-[11px] text-muted-foreground sm:hidden">
-        {status === "saving" ? (
-          <Loader2 className="size-3.5 animate-spin" />
-        ) : (
-          <Check className="size-3.5 text-emerald-600" />
-        )}
-      </div>
-
-      <div className="flex items-center gap-1.5">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          disabled={!canUndo}
-          onClick={onUndo}
-          aria-label="Undo"
-        >
-          <Undo2 className="size-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          disabled={!canRedo}
-          onClick={onRedo}
-          aria-label="Redo"
-        >
-          <Redo2 className="size-4" />
-        </Button>
-
-        {/* Secondary actions: always visible from sm up, tucked into a menu on phones
-            so the toolbar doesn't wrap into multiple rows and eat editing space. */}
-        <div className="hidden items-center gap-1.5 sm:flex">
-          <div className="mx-1 h-5 w-px bg-border" />
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 text-xs border-primary/30 text-primary hover:bg-primary/5"
-            asChild
+    <>
+      <div className="no-print flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background/80 px-4 py-2.5 backdrop-blur z-20">
+        {/* Left: Brand + Document Title */}
+        <div className="flex items-center gap-3">
+          <Link
+            to="/"
+            className="flex items-center gap-2 font-display text-sm font-semibold hover:opacity-80 transition-opacity"
           >
-            <Link to="/resumes/$resumeId/ats" params={{ resumeId }}>
-              <FileSearch className="size-3.5" /> ATS Score
-            </Link>
+            <span className="flex size-7 items-center justify-center rounded-lg bg-[image:var(--gradient-emerald)] text-primary-foreground shadow-[var(--shadow-glow)]">
+              <Sparkles className="size-3.5" />
+            </span>
+            <span className="hidden sm:inline font-bold">PeasiProfile</span>
+          </Link>
+
+          <div className="h-4 w-px bg-border hidden sm:block" />
+
+          {/* Editable Document Title */}
+          <div className="flex items-center gap-1.5">
+            {editingTitle ? (
+              <Input
+                type="text"
+                value={title}
+                onChange={(e) => onTitleChange(e.target.value)}
+                onBlur={() => setEditingTitle(false)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") setEditingTitle(false);
+                }}
+                autoFocus
+                className="h-7 w-48 text-xs font-semibold px-2"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditingTitle(true)}
+                className="flex items-center gap-1.5 rounded px-2 py-1 text-xs font-semibold hover:bg-secondary/70 transition-colors text-foreground group"
+                title="Click to rename"
+              >
+                <span className="truncate max-w-[140px] sm:max-w-[200px]">{title}</span>
+                <Edit2 className="size-3 text-muted-foreground group-hover:text-foreground shrink-0 opacity-60" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Center: Save status & Completion score */}
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1">
+            {status === "saving" ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin text-primary" /> Saving…
+              </>
+            ) : (
+              <>
+                <Check className="size-3.5 text-emerald-600" />
+                <span>{isCloudSynced ? "Synced to cloud" : "Saved"}</span>
+              </>
+            )}
+          </div>
+
+          <div className="h-3 w-px bg-border hidden md:block" />
+
+          {/* Real Completion percentage */}
+          <div className="hidden md:flex items-center gap-1.5">
+            <div className="h-2 w-16 rounded-full bg-secondary overflow-hidden">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-300"
+                style={{ width: `${completion.score}%` }}
+              />
+            </div>
+            <span className="font-semibold text-[11px] text-foreground">
+              {completion.score}% Complete
+            </span>
+          </div>
+        </div>
+
+        {/* Right: Actions */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            disabled={!canUndo}
+            onClick={onUndo}
+            aria-label="Undo"
+          >
+            <Undo2 className="size-4" />
           </Button>
           <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            disabled={!canRedo}
+            onClick={onRedo}
+            aria-label="Redo"
+          >
+            <Redo2 className="size-4" />
+          </Button>
+
+          <div className="mx-1 h-5 w-px bg-border hidden sm:block" />
+
+          <input
+            ref={importRef}
+            type="file"
+            accept="application/json"
+            className="hidden"
+            onChange={(e) => handleImport(e.target.files?.[0])}
+          />
+          <Button
             variant="outline"
             size="sm"
-            className="gap-1.5 text-xs"
+            className="gap-1.5 text-xs hidden sm:flex"
             onClick={() => importRef.current?.click()}
           >
             <Upload className="size-3.5" /> Import
           </Button>
+
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5 text-xs"
-            onClick={() => downloadJson(`${data.personal.fullName || "resume"}.json`, data)}
+            className="gap-1.5 text-xs hidden md:flex"
+            onClick={() => downloadJson(`${title || "resume"}.json`, data)}
           >
-            <FileJson className="size-3.5" /> Export JSON
+            <FileJson className="size-3.5" /> JSON
           </Button>
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 text-xs text-muted-foreground hidden lg:flex"
+              >
+                <RotateCcw className="size-3.5" /> Reset
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Start a fresh resume?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This resets the current draft in the editor. You can always undo or export a JSON
+                  backup first.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={onResetBlank}>Clear and start blank</AlertDialogAction>
+                <AlertDialogAction onClick={onResetSample}>Load sample instead</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
           <Button
             variant="ghost"
             size="sm"
-            className="gap-1.5 text-xs text-muted-foreground"
-            onClick={() => setStartOverOpen(true)}
+            className="gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+            asChild
           >
-            <RotateCcw className="size-3.5" /> Start over
+            <Link to="/dashboard">
+              <LayoutDashboard className="size-3.5 text-primary" />
+              <span className="hidden sm:inline">Dashboard</span>
+            </Link>
+          </Button>
+
+          <Button
+            variant="hero"
+            size="sm"
+            className="gap-1.5 font-semibold shadow-[var(--shadow-glow)]"
+            onClick={handleDownload}
+          >
+            <Download className="size-3.5" /> Download PDF
           </Button>
         </div>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8 sm:hidden"
-              aria-label="More actions"
-            >
-              <MoreVertical className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem asChild className="gap-2">
-              <Link to="/resumes/$resumeId/ats" params={{ resumeId }}>
-                <FileSearch className="size-3.5" /> ATS Score
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => importRef.current?.click()} className="gap-2">
-              <Upload className="size-3.5" /> Import JSON
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => downloadJson(`${data.personal.fullName || "resume"}.json`, data)}
-              className="gap-2"
-            >
-              <FileJson className="size-3.5" /> Export JSON
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => setStartOverOpen(true)}
-              className="gap-2 text-destructive"
-            >
-              <RotateCcw className="size-3.5" /> Start over
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <AlertDialog open={startOverOpen} onOpenChange={setStartOverOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Start a new résumé?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This clears everything currently in the editor. Export a JSON backup first if you
-                want to keep it.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={onResetBlank}>Clear and start blank</AlertDialogAction>
-              <AlertDialogAction onClick={onResetSample}>Load sample instead</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        <DownloadMenu onDownload={handleDownload} exporting={exporting} size="compact" />
       </div>
-      <ExportSurface />
-    </div>
+
+      <ResumeReadyModal
+        open={readyModalOpen}
+        onOpenChange={setReadyModalOpen}
+        pageSize={style.pageSize}
+        resumeTitle={title}
+      />
+    </>
   );
 }

@@ -23,7 +23,7 @@ export function MckinseyConsultingTemplate({ data, style, pageRef }: TemplatePro
           <h1 className="text-[2em] font-bold text-slate-900 leading-tight">
             {data.personal.fullName || "Your Name"}
           </h1>
-        {data.personal.title ? (
+          {data.personal.title ? (
             <p className="text-[0.95em] font-medium text-slate-600">{data.personal.title}</p>
           ) : null}
         </div>
@@ -36,14 +36,7 @@ export function MckinseyConsultingTemplate({ data, style, pageRef }: TemplatePro
       </header>
 
       {sections.map((s) => (
-        <SectionBody
-          key={s.kind}
-          kind={s.kind}
-          data={data}
-          look={look}
-          bulletOverride={style.bulletStyle}
-          dividerOverride={style.sectionDividers}
-        />
+        <SectionBody key={s.kind} kind={s.kind} data={data} look={look} />
       ))}
     </ResumePage>
   );

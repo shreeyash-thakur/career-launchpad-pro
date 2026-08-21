@@ -1,6 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ProtectedRoute } from "@/components/auth/protected-route";
 import {
   Accordion,
   AccordionContent,
@@ -26,43 +25,93 @@ import { TemplatePicker } from "@/features/resume-builder/components/template-pi
 import { CustomizePanel } from "@/features/resume-builder/components/customize-panel";
 import { ResumePreview } from "@/features/resume-builder/components/resume-preview";
 import { getTemplate } from "@/features/resume-builder/templates";
-import { Sparkles, X } from "lucide-react";
+import { Sparkles, X, AlertTriangle, ArrowLeft, Loader2 } from "lucide-react";
+import { useAuth } from "@/context/auth-context";
+import { ResumeService, type FirestoreResume } from "@/lib/resume-service";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/builder")({
   head: () => ({
     meta: [
-      { title: "Résumé Builder — CareerGPT" },
+      { title: "Resume Builder — PeasiProfile" },
       {
         name: "description",
         content:
-          "Build a recruiter-ready résumé with a live preview, six original templates, and one-click PDF export.",
+          "Build a recruiter-ready resume with a live preview, 25 original templates, and one-click PDF export.",
       },
     ],
   }),
   validateSearch: (
     search: Record<string, unknown>,
-  ): { template?: string | undefined; fromOnboarding?: string | undefined } => ({
+  ): { template?: string; fromOnboarding?: string; resumeId?: string } => ({
     template: typeof search["template"] === "string" ? search["template"] : undefined,
     fromOnboarding:
       typeof search["fromOnboarding"] === "string" ? search["fromOnboarding"] : undefined,
+    resumeId: typeof search["resumeId"] === "string" ? search["resumeId"] : undefined,
   }),
   component: BuilderPage,
 });
 
 function BuilderPage() {
-  return (
-    <ProtectedRoute>
-      <BuilderContent />
-    </ProtectedRoute>
-  );
-}
-
-function BuilderContent() {
-  const store = useResumeStore();
-  const { data, setData, style, setStyle } = store;
   const search = Route.useSearch();
-  const appliedRef = useRef(false);
+  const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
+
+  const [loadingDoc, setLoadingDoc] = useState(Boolean(search.resumeId));
+  const [docError, setDocError] = useState<string | null>(null);
+  const [loadedResume, setLoadedResume] = useState<FirestoreResume | null>(null);
   const [showBanner, setShowBanner] = useState(false);
+  const appliedRef = useRef(false);
+
+  // Fetch Firestore resume if resumeId provided
+  useEffect(() => {
+    let active = true;
+    async function loadResume() {
+      if (!search.resumeId) {
+        setLoadingDoc(false);
+        return;
+      }
+      setLoadingDoc(true);
+      setDocError(null);
+
+      try {
+        const res = await ResumeService.getResume(search.resumeId, user?.uid || "guest");
+        if (!active) return;
+        if (!res) {
+          setDocError("Resume not found or was deleted.");
+        } else if (user?.uid && res.uid && res.uid !== user.uid) {
+          setDocError("You do not have permission to view or edit this resume.");
+        } else {
+          setLoadedResume(res);
+        }
+      } catch (err: unknown) {
+        if (!active) return;
+        if (err instanceof Error && err.message === "UNAUTHORIZED_RESUME_ACCESS") {
+          setDocError("You do not have permission to access this resume.");
+        } else {
+          setDocError("Could not load resume data. Please try again.");
+        }
+      } finally {
+        if (active) setLoadingDoc(false);
+      }
+    }
+
+    if (!authLoading) {
+      void loadResume();
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [search.resumeId, user?.uid, authLoading]);
+
+  const store = useResumeStore({
+    resumeId: search.resumeId,
+    userId: user?.uid,
+    initialResume: loadedResume,
+  });
+
+  const { title, setTitle, data, setData, style, setStyle } = store;
 
   // Apply template from URL search param (from onboarding or landing page)
   useEffect(() => {
@@ -87,8 +136,52 @@ function BuilderContent() {
     return () => clearTimeout(t);
   }, [showBanner]);
 
+  if (loadingDoc || authLoading) {
+    return (
+      <div className="flex h-svh flex-col items-center justify-center bg-background px-4">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <Loader2 className="size-8 animate-spin text-primary" />
+          <h2 className="font-display text-lg font-semibold">Opening your resume…</h2>
+          <p className="text-xs text-muted-foreground">Preparing live editor and print styles</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (docError) {
+    return (
+      <div className="flex h-svh flex-col items-center justify-center bg-background px-4">
+        <div className="max-w-md rounded-2xl border border-border bg-card p-6 text-center shadow-lg">
+          <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+            <AlertTriangle className="size-6" />
+          </div>
+          <h1 className="font-display text-xl font-bold">{docError}</h1>
+          <p className="mt-2 text-xs text-muted-foreground">
+            The resume you tried to access cannot be found or belongs to another user account.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-2">
+            <Button variant="hero" size="sm" asChild>
+              <Link to="/dashboard">
+                <ArrowLeft className="size-4" /> Go to Dashboard
+              </Link>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void navigate({ to: "/builder", search: {} });
+              }}
+            >
+              Start New Draft
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const recommendedName = search.template
-    ? getTemplate(search.template)?.name ?? "template"
+    ? (getTemplate(search.template)?.name ?? "template")
     : "template";
 
   return (
@@ -100,8 +193,8 @@ function BuilderContent() {
             <Sparkles className="size-4 shrink-0" aria-hidden="true" />
             <span>
               Based on your answers, we selected the{" "}
-              <strong className="font-semibold">{recommendedName}</strong> template for you.
-              Switch anytime in the Design tab.
+              <strong className="font-semibold">{recommendedName}</strong> template for you. Switch
+              anytime in the Design tab.
             </span>
           </div>
           <button
@@ -117,6 +210,8 @@ function BuilderContent() {
       )}
 
       <BuilderToolbar
+        title={title}
+        onTitleChange={setTitle}
         data={data}
         style={style}
         status={store.status}
@@ -127,6 +222,7 @@ function BuilderContent() {
         onReplaceData={(next) => setData(next)}
         onResetBlank={() => store.resetToBlank(blankResume())}
         onResetSample={() => setData(sampleResume())}
+        isCloudSynced={Boolean(search.resumeId && user?.uid)}
       />
 
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[420px_1fr]">
@@ -280,7 +376,7 @@ function BuilderContent() {
           </Tabs>
         </div>
 
-        <div className="order-1 min-h-0 min-w-0 overflow-hidden lg:order-2">
+        <div className="order-1 min-h-0 overflow-hidden lg:order-2">
           <ResumePreview data={data} style={style} onStyleChange={setStyle} />
         </div>
       </div>

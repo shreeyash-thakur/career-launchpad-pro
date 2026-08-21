@@ -13,46 +13,46 @@ import { cn } from "@/lib/utils";
 
 // ─── Accent palette per template ────────────────────────────────────────────
 const TEMPLATE_ACCENTS: Record<string, { bg: string; side: string }> = {
-  modern:                { bg: "bg-[oklch(0.97_0.01_95)]",  side: "var(--gradient-emerald)" },
-  minimal:               { bg: "bg-[oklch(0.98_0.005_95)]", side: "oklch(0.75_0.04_165)" },
-  "compact-ats":         { bg: "bg-[oklch(0.97_0.01_95)]", side: "oklch(0.65_0.05_240)" },
-  "harvard-ats":         { bg: "bg-[oklch(0.98_0.005_95)]", side: "oklch(0.2_0.02_240)" },
-  executive:             { bg: "bg-[oklch(0.97_0.008_80)]", side: "oklch(0.6_0.08_40)" },
-  "mckinsey-consulting": { bg: "bg-[oklch(0.97_0.01_95)]",  side: "oklch(0.3_0.08_240)" },
+  modern: { bg: "bg-[oklch(0.97_0.01_95)]", side: "var(--gradient-emerald)" },
+  minimal: { bg: "bg-[oklch(0.98_0.005_95)]", side: "oklch(0.75_0.04_165)" },
+  "compact-ats": { bg: "bg-[oklch(0.97_0.01_95)]", side: "oklch(0.65_0.05_240)" },
+  "harvard-ats": { bg: "bg-[oklch(0.98_0.005_95)]", side: "oklch(0.2_0.02_240)" },
+  executive: { bg: "bg-[oklch(0.97_0.008_80)]", side: "oklch(0.6_0.08_40)" },
+  "mckinsey-consulting": { bg: "bg-[oklch(0.97_0.01_95)]", side: "oklch(0.3_0.08_240)" },
   "wall-street-finance": { bg: "bg-[oklch(0.97_0.008_80)]", side: "oklch(0.25_0.1_265)" },
-  elegant:               { bg: "bg-[oklch(0.97_0.012_80)]", side: "var(--gradient-gold)" },
-  "teal-sidebar":        { bg: "bg-[oklch(0.97_0.01_95)]",  side: "oklch(0.65_0.12_180)" },
-  creative:              { bg: "bg-[oklch(0.97_0.01_95)]",  side: "var(--gradient-emerald)" },
-  "bold-header":         { bg: "bg-[oklch(0.97_0.01_95)]", side: "var(--gradient-emerald)" },
-  startup:               { bg: "bg-[oklch(0.97_0.01_95)]",  side: "var(--gradient-emerald)" },
-  developer:             { bg: "bg-[oklch(0.12_0.02_240)]", side: "oklch(0.7_0.18_145)" },
-  "react-developer":     { bg: "bg-[oklch(0.12_0.02_240)]", side: "oklch(0.65_0.18_220)" },
-  "tech-grid":           { bg: "bg-[oklch(0.14_0.02_240)]", side: "oklch(0.6_0.15_260)" },
-  "ai-research":         { bg: "bg-[oklch(0.97_0.01_95)]",  side: "oklch(0.7_0.16_60)" },
-  timeline:              { bg: "bg-[oklch(0.97_0.01_95)]",  side: "var(--gradient-emerald)" },
-  "editorial-slate":     { bg: "bg-[oklch(0.98_0.005_95)]", side: "oklch(0.35_0.05_240)" },
-  "campus-graduate":     { bg: "bg-[oklch(0.97_0.01_95)]",  side: "oklch(0.55_0.15_250)" },
-  academic:              { bg: "bg-[oklch(0.98_0.005_80)]", side: "oklch(0.55_0.08_30)" },
+  elegant: { bg: "bg-[oklch(0.97_0.012_80)]", side: "var(--gradient-gold)" },
+  "teal-sidebar": { bg: "bg-[oklch(0.97_0.01_95)]", side: "oklch(0.65_0.12_180)" },
+  creative: { bg: "bg-[oklch(0.97_0.01_95)]", side: "var(--gradient-emerald)" },
+  "bold-header": { bg: "bg-[oklch(0.97_0.01_95)]", side: "var(--gradient-emerald)" },
+  startup: { bg: "bg-[oklch(0.97_0.01_95)]", side: "var(--gradient-emerald)" },
+  developer: { bg: "bg-[oklch(0.12_0.02_240)]", side: "oklch(0.7_0.18_145)" },
+  "react-developer": { bg: "bg-[oklch(0.12_0.02_240)]", side: "oklch(0.65_0.18_220)" },
+  "tech-grid": { bg: "bg-[oklch(0.14_0.02_240)]", side: "oklch(0.6_0.15_260)" },
+  "ai-research": { bg: "bg-[oklch(0.97_0.01_95)]", side: "oklch(0.7_0.16_60)" },
+  timeline: { bg: "bg-[oklch(0.97_0.01_95)]", side: "var(--gradient-emerald)" },
+  "editorial-slate": { bg: "bg-[oklch(0.98_0.005_95)]", side: "oklch(0.35_0.05_240)" },
+  "campus-graduate": { bg: "bg-[oklch(0.97_0.01_95)]", side: "oklch(0.55_0.15_250)" },
+  academic: { bg: "bg-[oklch(0.98_0.005_80)]", side: "oklch(0.55_0.08_30)" },
 };
 
 // ─── Category → template id map for filtering ────────────────────────────────
 const CATEGORY_MAP: Record<string, string[]> = {
-  All:           BUILDER_TEMPLATES.map((t) => t.id),
-  Modern:        ["modern", "startup", "teal-sidebar"],
-  Corporate:     ["executive", "modern", "mckinsey-consulting"],
-  Creative:      ["creative", "bold-header", "startup", "editorial-slate"],
-  Minimal:       ["minimal", "editorial-slate"],
-  Developer:     ["developer", "react-developer", "tech-grid", "compact-ats"],
-  Student:       ["campus-graduate", "minimal", "modern", "startup"],
-  Executive:     ["executive", "elegant", "wall-street-finance", "mckinsey-consulting", "academic"],
-  Elegant:       ["elegant", "teal-sidebar"],
-  Engineering:   ["developer", "react-developer", "tech-grid", "ai-research", "compact-ats"],
-  Marketing:     ["creative", "bold-header", "editorial-slate"],
-  Finance:       ["wall-street-finance", "mckinsey-consulting", "executive", "minimal"],
-  Medical:       ["academic", "minimal", "harvard-ats"],
+  All: BUILDER_TEMPLATES.map((t) => t.id),
+  Modern: ["modern", "startup", "teal-sidebar"],
+  Corporate: ["executive", "modern", "mckinsey-consulting"],
+  Creative: ["creative", "bold-header", "startup", "editorial-slate"],
+  Minimal: ["minimal", "editorial-slate"],
+  Developer: ["developer", "react-developer", "tech-grid", "compact-ats"],
+  Student: ["campus-graduate", "minimal", "modern", "startup"],
+  Executive: ["executive", "elegant", "wall-street-finance", "mckinsey-consulting", "academic"],
+  Elegant: ["elegant", "teal-sidebar"],
+  Engineering: ["developer", "react-developer", "tech-grid", "ai-research", "compact-ats"],
+  Marketing: ["creative", "bold-header", "editorial-slate"],
+  Finance: ["wall-street-finance", "mckinsey-consulting", "executive", "minimal"],
+  Medical: ["academic", "minimal", "harvard-ats"],
   "ATS Friendly": ["compact-ats", "harvard-ats", "ats-classic", "developer", "minimal", "modern"],
-  Timeline:      ["timeline"],
-  "One Page":    ["minimal", "compact-ats", "modern", "harvard-ats", "mckinsey-consulting"],
+  Timeline: ["timeline"],
+  "One Page": ["minimal", "compact-ats", "modern", "harvard-ats", "mckinsey-consulting"],
 };
 
 // ─── Realistic mini resume thumbnail ────────────────────────────────────────
@@ -65,12 +65,8 @@ function ResumeThumbnail({
 }) {
   const accent = TEMPLATE_ACCENTS[templateId] ?? TEMPLATE_ACCENTS["modern"]!;
   const isDark = templateId === "developer" || templateId === "tech-grid";
-  const lineColor = isDark
-    ? "oklch(0.7_0.15_145_/_30%)"
-    : "oklch(0.2_0.02_165_/_14%)";
-  const headlineColor = isDark
-    ? "oklch(0.7_0.15_145_/_60%)"
-    : "oklch(0.2_0.02_165_/_35%)";
+  const lineColor = isDark ? "oklch(0.7_0.15_145_/_30%)" : "oklch(0.2_0.02_165_/_14%)";
+  const headlineColor = isDark ? "oklch(0.7_0.15_145_/_60%)" : "oklch(0.2_0.02_165_/_35%)";
   const isTwoCol = templateId === "elegant" || templateId === "creative";
 
   return (
@@ -94,14 +90,22 @@ function ResumeThumbnail({
             <div className="h-2 w-4/5 rounded-full bg-white/40" />
             <div className="h-1.5 w-3/5 rounded-full bg-white/30" />
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-1.5 rounded-full bg-white/20" style={{ width: `${60 + i * 8}%` }} />
+              <div
+                key={i}
+                className="h-1.5 rounded-full bg-white/20"
+                style={{ width: `${60 + i * 8}%` }}
+              />
             ))}
           </div>
           {/* Main */}
           <div className="flex flex-1 flex-col gap-1.5 pt-1">
             <div className="h-2 w-4/5 rounded-full" style={{ backgroundColor: headlineColor }} />
             {Array.from({ length: 9 }).map((_, i) => (
-              <div key={i} className="h-1.5 rounded-full" style={{ backgroundColor: lineColor, width: `${68 + ((i * 11) % 28)}%` }} />
+              <div
+                key={i}
+                className="h-1.5 rounded-full"
+                style={{ backgroundColor: lineColor, width: `${68 + ((i * 11) % 28)}%` }}
+              />
             ))}
           </div>
         </div>
@@ -118,7 +122,11 @@ function ResumeThumbnail({
           <div className="flex flex-col gap-1.5">
             <div className="h-2 w-1/3 rounded-full" style={{ backgroundColor: headlineColor }} />
             {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="h-1.5 rounded-full" style={{ backgroundColor: lineColor, width: `${68 + ((i * 13) % 28)}%` }} />
+              <div
+                key={i}
+                className="h-1.5 rounded-full"
+                style={{ backgroundColor: lineColor, width: `${68 + ((i * 13) % 28)}%` }}
+              />
             ))}
           </div>
         </>
@@ -233,10 +241,7 @@ export function TemplateShowcase() {
             >
               {visibleTemplates.map((template) => (
                 <li key={template.id}>
-                  <TemplateCard
-                    template={template}
-                    recommended={template.id === recommendedId}
-                  />
+                  <TemplateCard template={template} recommended={template.id === recommendedId} />
                 </li>
               ))}
             </motion.ul>

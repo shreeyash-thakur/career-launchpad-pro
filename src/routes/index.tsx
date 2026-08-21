@@ -7,7 +7,6 @@ import { Hero } from "@/components/landing/hero";
 import { Features } from "@/components/landing/features";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// Below-the-fold sections are code-split so the hero ships the smallest bundle.
 const ResumeShowcase = lazy(() =>
   import("@/components/landing/resume-showcase").then((m) => ({ default: m.ResumeShowcase })),
 );
@@ -35,9 +34,9 @@ const CursorGlow = lazy(() =>
   import("@/components/landing/cursor-glow").then((m) => ({ default: m.CursorGlow })),
 );
 
-const TITLE = "CareerGPT — Premium résumé builder with live preview";
+const TITLE = "PeasiProfile — Free ATS Resume Builder with Live Vector Preview";
 const DESCRIPTION =
-  "Design a recruiter-ready résumé with drag-and-drop sections, a print-accurate live preview, 25 original templates and one-click PDF export.";
+  "Design recruiter-ready, ATS-optimized resumes with 20+ original templates, live vector preview, debounced cloud autosave, and instant free PDF export.";
 
 export const Route = createFileRoute("/")({
   component: Landing,
@@ -58,7 +57,7 @@ export const Route = createFileRoute("/")({
         children: JSON.stringify({
           "@context": "https://schema.org",
           "@type": "SoftwareApplication",
-          name: "CareerGPT",
+          name: "PeasiProfile",
           applicationCategory: "BusinessApplication",
           operatingSystem: "Web",
           description: DESCRIPTION,

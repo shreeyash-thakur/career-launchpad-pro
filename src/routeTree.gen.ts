@@ -11,16 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BuilderRouteImport } from './routes/builder'
-import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
-import { Route as LoginRouteImport } from './routes/login'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
-import { Route as SignupRouteImport } from './routes/signup'
-import { Route as ResumesIndexRouteImport } from './routes/resumes/index'
-import { Route as ResumesResumeIdAtsRouteImport } from './routes/resumes/$resumeId/ats'
-import { Route as ResumesResumeIdCheckRouteImport } from './routes/resumes/$resumeId/check'
-import { Route as ResumesResumeIdEditorRouteImport } from './routes/resumes/$resumeId/editor'
-import { Route as ResumesResumeIdQuestionnaireRouteImport } from './routes/resumes/$resumeId/questionnaire'
-import { Route as ResumesResumeIdTemplateRouteImport } from './routes/resumes/$resumeId/template'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -32,14 +24,9 @@ const BuilderRoute = BuilderRouteImport.update({
   path: '/builder',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
-  id: '/forgot-password',
-  path: '/forgot-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OnboardingRoute = OnboardingRouteImport.update({
@@ -47,144 +34,39 @@ const OnboardingRoute = OnboardingRouteImport.update({
   path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SignupRoute = SignupRouteImport.update({
-  id: '/signup',
-  path: '/signup',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ResumesIndexRoute = ResumesIndexRouteImport.update({
-  id: '/resumes/',
-  path: '/resumes/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ResumesResumeIdAtsRoute = ResumesResumeIdAtsRouteImport.update({
-  id: '/resumes/$resumeId/ats',
-  path: '/resumes/$resumeId/ats',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ResumesResumeIdCheckRoute = ResumesResumeIdCheckRouteImport.update({
-  id: '/resumes/$resumeId/check',
-  path: '/resumes/$resumeId/check',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ResumesResumeIdEditorRoute = ResumesResumeIdEditorRouteImport.update({
-  id: '/resumes/$resumeId/editor',
-  path: '/resumes/$resumeId/editor',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ResumesResumeIdQuestionnaireRoute =
-  ResumesResumeIdQuestionnaireRouteImport.update({
-    id: '/resumes/$resumeId/questionnaire',
-    path: '/resumes/$resumeId/questionnaire',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ResumesResumeIdTemplateRoute = ResumesResumeIdTemplateRouteImport.update({
-  id: '/resumes/$resumeId/template',
-  path: '/resumes/$resumeId/template',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/builder': typeof BuilderRoute
-  '/forgot-password': typeof ForgotPasswordRoute
-  '/login': typeof LoginRoute
+  '/dashboard': typeof DashboardRoute
   '/onboarding': typeof OnboardingRoute
-  '/signup': typeof SignupRoute
-  '/resumes/': typeof ResumesIndexRoute
-  '/resumes/$resumeId/ats': typeof ResumesResumeIdAtsRoute
-  '/resumes/$resumeId/check': typeof ResumesResumeIdCheckRoute
-  '/resumes/$resumeId/editor': typeof ResumesResumeIdEditorRoute
-  '/resumes/$resumeId/questionnaire': typeof ResumesResumeIdQuestionnaireRoute
-  '/resumes/$resumeId/template': typeof ResumesResumeIdTemplateRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/builder': typeof BuilderRoute
-  '/forgot-password': typeof ForgotPasswordRoute
-  '/login': typeof LoginRoute
+  '/dashboard': typeof DashboardRoute
   '/onboarding': typeof OnboardingRoute
-  '/signup': typeof SignupRoute
-  '/resumes': typeof ResumesIndexRoute
-  '/resumes/$resumeId/ats': typeof ResumesResumeIdAtsRoute
-  '/resumes/$resumeId/check': typeof ResumesResumeIdCheckRoute
-  '/resumes/$resumeId/editor': typeof ResumesResumeIdEditorRoute
-  '/resumes/$resumeId/questionnaire': typeof ResumesResumeIdQuestionnaireRoute
-  '/resumes/$resumeId/template': typeof ResumesResumeIdTemplateRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/builder': typeof BuilderRoute
-  '/forgot-password': typeof ForgotPasswordRoute
-  '/login': typeof LoginRoute
+  '/dashboard': typeof DashboardRoute
   '/onboarding': typeof OnboardingRoute
-  '/signup': typeof SignupRoute
-  '/resumes/': typeof ResumesIndexRoute
-  '/resumes/$resumeId/ats': typeof ResumesResumeIdAtsRoute
-  '/resumes/$resumeId/check': typeof ResumesResumeIdCheckRoute
-  '/resumes/$resumeId/editor': typeof ResumesResumeIdEditorRoute
-  '/resumes/$resumeId/questionnaire': typeof ResumesResumeIdQuestionnaireRoute
-  '/resumes/$resumeId/template': typeof ResumesResumeIdTemplateRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/builder'
-    | '/forgot-password'
-    | '/login'
-    | '/onboarding'
-    | '/signup'
-    | '/resumes/'
-    | '/resumes/$resumeId/ats'
-    | '/resumes/$resumeId/check'
-    | '/resumes/$resumeId/editor'
-    | '/resumes/$resumeId/questionnaire'
-    | '/resumes/$resumeId/template'
+  fullPaths: '/' | '/builder' | '/dashboard' | '/onboarding'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/builder'
-    | '/forgot-password'
-    | '/login'
-    | '/onboarding'
-    | '/signup'
-    | '/resumes'
-    | '/resumes/$resumeId/ats'
-    | '/resumes/$resumeId/check'
-    | '/resumes/$resumeId/editor'
-    | '/resumes/$resumeId/questionnaire'
-    | '/resumes/$resumeId/template'
-  id:
-    | '__root__'
-    | '/'
-    | '/builder'
-    | '/forgot-password'
-    | '/login'
-    | '/onboarding'
-    | '/signup'
-    | '/resumes/'
-    | '/resumes/$resumeId/ats'
-    | '/resumes/$resumeId/check'
-    | '/resumes/$resumeId/editor'
-    | '/resumes/$resumeId/questionnaire'
-    | '/resumes/$resumeId/template'
+  to: '/' | '/builder' | '/dashboard' | '/onboarding'
+  id: '__root__' | '/' | '/builder' | '/dashboard' | '/onboarding'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BuilderRoute: typeof BuilderRoute
-  ForgotPasswordRoute: typeof ForgotPasswordRoute
-  LoginRoute: typeof LoginRoute
+  DashboardRoute: typeof DashboardRoute
   OnboardingRoute: typeof OnboardingRoute
-  SignupRoute: typeof SignupRoute
-  ResumesIndexRoute: typeof ResumesIndexRoute
-  ResumesResumeIdAtsRoute: typeof ResumesResumeIdAtsRoute
-  ResumesResumeIdCheckRoute: typeof ResumesResumeIdCheckRoute
-  ResumesResumeIdEditorRoute: typeof ResumesResumeIdEditorRoute
-  ResumesResumeIdQuestionnaireRoute: typeof ResumesResumeIdQuestionnaireRoute
-  ResumesResumeIdTemplateRoute: typeof ResumesResumeIdTemplateRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -203,18 +85,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BuilderRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/forgot-password': {
-      id: '/forgot-password'
-      path: '/forgot-password'
-      fullPath: '/forgot-password'
-      preLoaderRoute: typeof ForgotPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/onboarding': {
@@ -224,71 +99,14 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/signup': {
-      id: '/signup'
-      path: '/signup'
-      fullPath: '/signup'
-      preLoaderRoute: typeof SignupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/resumes/': {
-      id: '/resumes/'
-      path: '/resumes'
-      fullPath: '/resumes/'
-      preLoaderRoute: typeof ResumesIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/resumes/$resumeId/ats': {
-      id: '/resumes/$resumeId/ats'
-      path: '/resumes/$resumeId/ats'
-      fullPath: '/resumes/$resumeId/ats'
-      preLoaderRoute: typeof ResumesResumeIdAtsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/resumes/$resumeId/check': {
-      id: '/resumes/$resumeId/check'
-      path: '/resumes/$resumeId/check'
-      fullPath: '/resumes/$resumeId/check'
-      preLoaderRoute: typeof ResumesResumeIdCheckRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/resumes/$resumeId/editor': {
-      id: '/resumes/$resumeId/editor'
-      path: '/resumes/$resumeId/editor'
-      fullPath: '/resumes/$resumeId/editor'
-      preLoaderRoute: typeof ResumesResumeIdEditorRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/resumes/$resumeId/questionnaire': {
-      id: '/resumes/$resumeId/questionnaire'
-      path: '/resumes/$resumeId/questionnaire'
-      fullPath: '/resumes/$resumeId/questionnaire'
-      preLoaderRoute: typeof ResumesResumeIdQuestionnaireRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/resumes/$resumeId/template': {
-      id: '/resumes/$resumeId/template'
-      path: '/resumes/$resumeId/template'
-      fullPath: '/resumes/$resumeId/template'
-      preLoaderRoute: typeof ResumesResumeIdTemplateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BuilderRoute: BuilderRoute,
-  ForgotPasswordRoute: ForgotPasswordRoute,
-  LoginRoute: LoginRoute,
+  DashboardRoute: DashboardRoute,
   OnboardingRoute: OnboardingRoute,
-  SignupRoute: SignupRoute,
-  ResumesIndexRoute: ResumesIndexRoute,
-  ResumesResumeIdAtsRoute: ResumesResumeIdAtsRoute,
-  ResumesResumeIdCheckRoute: ResumesResumeIdCheckRoute,
-  ResumesResumeIdEditorRoute: ResumesResumeIdEditorRoute,
-  ResumesResumeIdQuestionnaireRoute: ResumesResumeIdQuestionnaireRoute,
-  ResumesResumeIdTemplateRoute: ResumesResumeIdTemplateRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

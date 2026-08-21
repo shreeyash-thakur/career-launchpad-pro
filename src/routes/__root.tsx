@@ -8,15 +8,12 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
+import { AuthProvider } from "@/context/auth-context";
+import { AuthModal } from "@/components/auth/auth-modal";
 
 import appCss from "../styles.css?url";
-import { AuthProvider } from "@/contexts/AuthContext";
-import { Toaster } from "@/components/ui/sonner";
-import { getFirebaseAnalytics } from "@/lib/firebase";
 
 function reportAppError(error: unknown, context: Record<string, unknown> = {}) {
-  // Local, dependency-free error logging (previously routed through Lovable's
-  // editor telemetry). Hook this up to Sentry/LogRocket/etc. if desired.
   console.error("[app error]", error, context);
 }
 
@@ -85,13 +82,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "CareerGPT — Premium résumé builder" },
+      { title: "PeasiProfile — Free ATS Resume Builder with Live Preview" },
       {
         name: "description",
         content:
-          "Design a recruiter-ready résumé with a live print-accurate preview, 25 original templates and one-click export.",
+          "Create recruiter-ready, ATS-optimized resumes with 20+ original templates, live vector preview, and instant free PDF download.",
       },
-      { property: "og:site_name", content: "CareerGPT" },
+      { property: "og:site_name", content: "PeasiProfile" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -130,17 +127,11 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
-  // Initialize Firebase Analytics once on the client (never during SSR).
-  useEffect(() => {
-    void getFirebaseAnalytics();
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
-        <Toaster position="top-center" richColors />
+        <AuthModal />
       </AuthProvider>
     </QueryClientProvider>
   );

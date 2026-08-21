@@ -72,8 +72,7 @@ export const TEMPLATES: (TemplateMeta & { Component: ComponentType<TemplateProps
     id: "mckinsey-consulting",
     name: "McKinsey Strategy Consultant",
     category: "Corporate",
-    description:
-      "Ultra-clean, high-density single-column format favored in management consulting.",
+    description: "Ultra-clean, high-density single-column format favored in management consulting.",
     columns: 1,
     Component: MckinseyConsultingTemplate,
   },
@@ -81,8 +80,7 @@ export const TEMPLATES: (TemplateMeta & { Component: ComponentType<TemplateProps
     id: "wall-street-finance",
     name: "Wall Street Finance Lead",
     category: "Finance",
-    description:
-      "Formal double-ruled lines with serif typography for banking and private equity.",
+    description: "Formal double-ruled lines with serif typography for banking and private equity.",
     columns: 1,
     Component: WallStreetFinanceTemplate,
   },

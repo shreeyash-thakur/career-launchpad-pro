@@ -1,255 +1,274 @@
 import {
-  addDoc,
-  collection,
-  deleteDoc,
   doc,
   getDoc,
-  getDocs,
-  query,
-  serverTimestamp,
+  setDoc,
   updateDoc,
+  deleteDoc,
+  collection,
+  query,
   where,
-  type Timestamp,
+  getDocs,
+  serverTimestamp,
 } from "firebase/firestore";
-import { getFirebaseDb } from "@/lib/firebase";
+import { db } from "./firebase";
 import type { ResumeData, ResumeStyle } from "@/features/resume-builder/types";
-import { blankResume, defaultStyle } from "@/features/resume-builder/sample-data";
-import { answersToResumeData } from "@/lib/questionnaire-to-resume";
+import { defaultStyle, sampleResume, blankResume } from "@/features/resume-builder/sample-data";
 
-export const QUESTIONNAIRE_VERSION = 1;
-
-export interface QuestionnaireAnswers {
-  careerGoal?: string;
-  targetRole?: string;
-  targetIndustry?: string;
-  personal?: {
-    fullName: string;
-    email: string;
-    phone: string;
-    location: string;
-    linkedin: string;
-    github: string;
-    portfolio: string;
-  };
-  education?: Array<{
-    degree: string;
-    school: string;
-    field: string;
-    startDate: string;
-    endDate: string;
-    gpa: string;
-  }>;
-  experience?: Array<{
-    company: string;
-    position: string;
-    location: string;
-    startDate: string;
-    endDate: string;
-    current: boolean;
-    bullets: string[];
-  }>;
-  hasExperience?: boolean;
-  skills?: {
-    technical: string[];
-    soft: string[];
-    tools: string[];
-    languages: string[];
-  };
-  projects?: Array<{
-    name: string;
-    description: string;
-    technologies: string[];
-    url: string;
-    githubUrl: string;
-  }>;
-  certifications?: Array<{
-    name: string;
-    issuer: string;
-    date: string;
-    url: string;
-  }>;
-  achievements?: string[];
-  additional?: {
-    languages?: Array<{ name: string; level: string }>;
-    volunteer?: string;
-    publications?: string;
-    extracurricular?: string;
-    interests?: string;
-  };
-}
-
-export interface ResumeDocument {
+export interface FirestoreResume {
   id: string;
   uid: string;
   title: string;
-  resumeData: ResumeData;
-  style: ResumeStyle;
   templateId: string;
+  resumeData: ResumeData;
+  resumeStyle: ResumeStyle;
   questionnaireCompleted: boolean;
   questionnaireVersion: number;
-  questionnaireAnswers?: QuestionnaireAnswers;
-  createdAt: Timestamp | null;
-  updatedAt: Timestamp | null;
+  questionnaireAnswers?: Record<string, string>;
+  createdAt: number;
+  updatedAt: number;
 }
 
-const RESUMES_COLLECTION = "resumes";
+const LOCAL_RESUMES_KEY = "peasiprofile:resumes:";
 
-function getResumesRef() {
-  return collection(getFirebaseDb(), RESUMES_COLLECTION);
+function getLocalStorageResumes(uid: string): FirestoreResume[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(LOCAL_RESUMES_KEY + uid);
+    if (!raw) return [];
+    return JSON.parse(raw) as FirestoreResume[];
+  } catch {
+    return [];
+  }
 }
 
-function getResumeRef(resumeId: string) {
-  return doc(getFirebaseDb(), RESUMES_COLLECTION, resumeId);
+function saveLocalStorageResumes(uid: string, list: FirestoreResume[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LOCAL_RESUMES_KEY + uid, JSON.stringify(list));
+  } catch (err) {
+    console.error("Failed to save resumes to localStorage cache:", err);
+  }
 }
 
-/**
- * Creates a new resume document scoped to the authenticated user.
- * Returns the new resume document with its Firestore ID.
- */
-export async function createResume(uid: string, title?: string): Promise<ResumeDocument> {
-  const now = serverTimestamp();
-  const docRef = await addDoc(getResumesRef(), {
-    uid,
-    title: title ?? "Untitled Resume",
-    resumeData: blankResume(),
-    style: defaultStyle(),
-    templateId: "modern",
-    questionnaireCompleted: false,
-    questionnaireVersion: QUESTIONNAIRE_VERSION,
-    createdAt: now,
-    updatedAt: now,
-  });
+export const ResumeService = {
+  async listUserResumes(uid: string): Promise<FirestoreResume[]> {
+    if (!uid) return [];
 
-  return {
-    id: docRef.id,
-    uid,
-    title: title ?? "Untitled Resume",
-    resumeData: blankResume(),
-    style: defaultStyle(),
-    templateId: "modern",
-    questionnaireCompleted: false,
-    questionnaireVersion: QUESTIONNAIRE_VERSION,
-    createdAt: null,
-    updatedAt: null,
-  };
-}
+    let liveResumes: FirestoreResume[] = [];
+    let firestoreFailed = false;
 
-/**
- * Fetches a single resume by ID. Returns null if not found or not owned by the user.
- */
-export async function getResume(resumeId: string, uid: string): Promise<ResumeDocument | null> {
-  const snap = await getDoc(getResumeRef(resumeId));
-  if (!snap.exists()) return null;
-  const data = snap.data() as Omit<ResumeDocument, "id">;
-  if (data.uid !== uid) return null;
-  return { ...data, id: snap.id };
-}
+    if (db && !db.app.options.apiKey?.startsWith("AIzaSyDemo")) {
+      try {
+        const q = query(collection(db, "resumes"), where("uid", "==", uid));
+        const snapshot = await getDocs(q);
+        liveResumes = snapshot.docs.map((docSnap) => {
+          const d = docSnap.data();
+          return {
+            id: docSnap.id,
+            uid: d["uid"] || uid,
+            title: d["title"] || "Untitled Resume",
+            templateId: d["templateId"] || d["resumeStyle"]?.templateId || "modern",
+            resumeData: d["resumeData"] || sampleResume(),
+            resumeStyle: d["resumeStyle"] || defaultStyle(),
+            questionnaireCompleted: Boolean(d["questionnaireCompleted"]),
+            questionnaireVersion: d["questionnaireVersion"] || 1,
+            questionnaireAnswers: d["questionnaireAnswers"] || {},
+            createdAt: d["createdAt"]?.toMillis
+              ? d["createdAt"].toMillis()
+              : typeof d["createdAt"] === "number"
+                ? d["createdAt"]
+                : Date.now(),
+            updatedAt: d["updatedAt"]?.toMillis
+              ? d["updatedAt"].toMillis()
+              : typeof d["updatedAt"] === "number"
+                ? d["updatedAt"]
+                : Date.now(),
+          };
+        });
+      } catch (err) {
+        console.warn("[Firestore] Failed to list resumes, using local cache:", err);
+        firestoreFailed = true;
+      }
+    } else {
+      firestoreFailed = true;
+    }
 
-/**
- * Updates a resume document. Only the owner can update.
- */
-export async function updateResume(
-  resumeId: string,
-  uid: string,
-  patch: Partial<Omit<ResumeDocument, "id" | "uid" | "createdAt">>,
-): Promise<void> {
-  await updateDoc(getResumeRef(resumeId), {
-    ...patch,
-    updatedAt: serverTimestamp(),
-  });
-}
+    if (firestoreFailed || liveResumes.length === 0) {
+      const cached = getLocalStorageResumes(uid);
+      if (cached.length > 0) {
+        return cached.sort((a, b) => b.updatedAt - a.updatedAt);
+      }
+    } else {
+      saveLocalStorageResumes(uid, liveResumes);
+      return liveResumes.sort((a, b) => b.updatedAt - a.updatedAt);
+    }
 
-/**
- * Deletes a resume document. Only the owner can delete.
- */
-export async function deleteResume(resumeId: string, uid: string): Promise<void> {
-  await deleteDoc(getResumeRef(resumeId));
-}
+    return liveResumes.sort((a, b) => b.updatedAt - a.updatedAt);
+  },
 
-/**
- * Lists all resumes belonging to the authenticated user, newest first.
- */
-export async function getUserResumes(uid: string): Promise<ResumeDocument[]> {
-  const q = query(getResumesRef(), where("uid", "==", uid));
-  const snap = await getDocs(q);
-  const resumes: ResumeDocument[] = [];
-  snap.forEach((docSnap) => {
-    const data = docSnap.data() as Omit<ResumeDocument, "id">;
-    resumes.push({ ...data, id: docSnap.id });
-  });
-  // Sort by updatedAt descending (newest first)
-  resumes.sort((a, b) => {
-    const aTime = a.updatedAt?.toMillis?.() ?? 0;
-    const bTime = b.updatedAt?.toMillis?.() ?? 0;
-    return bTime - aTime;
-  });
-  return resumes;
-}
+  async getResume(resumeId: string, uid: string): Promise<FirestoreResume | null> {
+    if (!resumeId) return null;
 
-/**
- * Marks the questionnaire as completed for a resume, and — critically —
- * converts the collected answers into actual résumé content (`resumeData`).
- * Without this conversion the résumé stays blank even after a full
- * questionnaire is filled in, since the editor/templates only ever read
- * `resumeData`, never `questionnaireAnswers`.
- */
-export async function markQuestionnaireCompleted(
-  resumeId: string,
-  uid: string,
-  answers: QuestionnaireAnswers,
-): Promise<void> {
-  const resumeData = answersToResumeData(answers);
-  await updateResume(resumeId, uid, {
-    questionnaireCompleted: true,
-    questionnaireVersion: QUESTIONNAIRE_VERSION,
-    questionnaireAnswers: answers,
-    resumeData,
-  });
-}
+    if (db && !db.app.options.apiKey?.startsWith("AIzaSyDemo")) {
+      try {
+        const ref = doc(db, "resumes", resumeId);
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          const d = snap.data();
+          if (d["uid"] && d["uid"] !== uid) {
+            // Security check: unauthorized
+            throw new Error("UNAUTHORIZED_RESUME_ACCESS");
+          }
+          return {
+            id: snap.id,
+            uid: d["uid"] || uid,
+            title: d["title"] || "Untitled Resume",
+            templateId: d["templateId"] || d["resumeStyle"]?.templateId || "modern",
+            resumeData: d["resumeData"] || sampleResume(),
+            resumeStyle: d["resumeStyle"] || defaultStyle(),
+            questionnaireCompleted: Boolean(d["questionnaireCompleted"]),
+            questionnaireVersion: d["questionnaireVersion"] || 1,
+            questionnaireAnswers: d["questionnaireAnswers"] || {},
+            createdAt: d["createdAt"]?.toMillis
+              ? d["createdAt"].toMillis()
+              : typeof d["createdAt"] === "number"
+                ? d["createdAt"]
+                : Date.now(),
+            updatedAt: d["updatedAt"]?.toMillis
+              ? d["updatedAt"].toMillis()
+              : typeof d["updatedAt"] === "number"
+                ? d["updatedAt"]
+                : Date.now(),
+          };
+        }
+      } catch (err: unknown) {
+        if (err instanceof Error && err.message === "UNAUTHORIZED_RESUME_ACCESS") {
+          throw err;
+        }
+        console.warn("[Firestore] Get doc fallback to local cache:", err);
+      }
+    }
 
-/**
- * Saves resume data + style to Firestore (debounced by caller).
- */
-export async function saveResumeContent(
-  resumeId: string,
-  uid: string,
-  resumeData: ResumeData,
-  style: ResumeStyle,
-): Promise<void> {
-  await updateResume(resumeId, uid, {
-    resumeData,
-    style,
-    templateId: style.templateId,
-  });
-}
+    const cachedList = getLocalStorageResumes(uid);
+    const found = cachedList.find((r) => r.id === resumeId);
+    if (found) {
+      if (found.uid && found.uid !== uid) {
+        throw new Error("UNAUTHORIZED_RESUME_ACCESS");
+      }
+      return found;
+    }
+    return null;
+  },
 
-/**
- * Duplicates a resume for the same user.
- */
-export async function duplicateResume(
-  resumeId: string,
-  uid: string,
-): Promise<ResumeDocument | null> {
-  const original = await getResume(resumeId, uid);
-  if (!original) return null;
-  const now = serverTimestamp();
-  const docRef = await addDoc(getResumesRef(), {
-    uid,
-    title: `${original.title} (Copy)`,
-    resumeData: original.resumeData,
-    style: original.style,
-    templateId: original.templateId,
-    questionnaireCompleted: original.questionnaireCompleted,
-    questionnaireVersion: original.questionnaireVersion,
-    questionnaireAnswers: original.questionnaireAnswers,
-    createdAt: now,
-    updatedAt: now,
-  });
-  return {
-    ...original,
-    id: docRef.id,
-    title: `${original.title} (Copy)`,
-    createdAt: null,
-    updatedAt: null,
-  };
-}
+  async createResume(uid: string, initial?: Partial<FirestoreResume>): Promise<FirestoreResume> {
+    const id = "res_" + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+    const now = Date.now();
+    const style = initial?.resumeStyle || {
+      ...defaultStyle(),
+      templateId: initial?.templateId || "modern",
+    };
+
+    const newResume: FirestoreResume = {
+      id,
+      uid,
+      title: initial?.title || "My Professional Resume",
+      templateId: initial?.templateId || style.templateId || "modern",
+      resumeData: initial?.resumeData || sampleResume(),
+      resumeStyle: style,
+      questionnaireCompleted: initial?.questionnaireCompleted ?? false,
+      questionnaireVersion: 1,
+      questionnaireAnswers: initial?.questionnaireAnswers || {},
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    if (db && !db.app.options.apiKey?.startsWith("AIzaSyDemo")) {
+      try {
+        const ref = doc(db, "resumes", id);
+        await setDoc(ref, {
+          ...newResume,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        console.warn("[Firestore] Create resume fallback to local storage:", err);
+      }
+    }
+
+    // Cache locally
+    const currentList = getLocalStorageResumes(uid);
+    saveLocalStorageResumes(uid, [newResume, ...currentList]);
+
+    return newResume;
+  },
+
+  async updateResume(
+    resumeId: string,
+    uid: string,
+    partial: Partial<FirestoreResume>,
+  ): Promise<void> {
+    const now = Date.now();
+
+    if (db && !db.app.options.apiKey?.startsWith("AIzaSyDemo")) {
+      try {
+        const ref = doc(db, "resumes", resumeId);
+        await updateDoc(ref, {
+          ...partial,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        console.warn("[Firestore] Update resume fallback to local cache:", err);
+      }
+    }
+
+    const currentList = getLocalStorageResumes(uid);
+    const updated = currentList.map((r) => {
+      if (r.id === resumeId) {
+        return {
+          ...r,
+          ...partial,
+          updatedAt: now,
+        };
+      }
+      return r;
+    });
+    saveLocalStorageResumes(uid, updated);
+  },
+
+  async renameResume(resumeId: string, uid: string, newTitle: string): Promise<void> {
+    await this.updateResume(resumeId, uid, { title: newTitle.trim() || "Untitled Resume" });
+  },
+
+  async duplicateResume(resumeId: string, uid: string): Promise<FirestoreResume> {
+    const source = await this.getResume(resumeId, uid);
+    if (!source) {
+      throw new Error("Resume not found to duplicate");
+    }
+
+    const cloned: Partial<FirestoreResume> = {
+      title: `Copy of ${source.title}`,
+      templateId: source.templateId,
+      resumeData: JSON.parse(JSON.stringify(source.resumeData)),
+      resumeStyle: JSON.parse(JSON.stringify(source.resumeStyle)),
+      questionnaireCompleted: source.questionnaireCompleted,
+      questionnaireAnswers: source.questionnaireAnswers ? { ...source.questionnaireAnswers } : {},
+    };
+
+    return await this.createResume(uid, cloned);
+  },
+
+  async deleteResume(resumeId: string, uid: string): Promise<void> {
+    if (db && !db.app.options.apiKey?.startsWith("AIzaSyDemo")) {
+      try {
+        const ref = doc(db, "resumes", resumeId);
+        await deleteDoc(ref);
+      } catch (err) {
+        console.warn("[Firestore] Delete resume fallback to local cache:", err);
+      }
+    }
+
+    const currentList = getLocalStorageResumes(uid);
+    const remaining = currentList.filter((r) => r.id !== resumeId);
+    saveLocalStorageResumes(uid, remaining);
+  },
+};
