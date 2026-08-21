@@ -26,7 +26,12 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function callOnce(model: string, systemPrompt: string, userMessage: string) {
+async function callOnce(
+  model: string,
+  systemPrompt: string,
+  userMessage: string,
+  maxTokens: number,
+) {
   const res = await fetch(BASE_URL, {
     method: "POST",
     headers: {
@@ -37,7 +42,7 @@ async function callOnce(model: string, systemPrompt: string, userMessage: string
     },
     body: JSON.stringify({
       model,
-      max_tokens: 600,
+      max_tokens: maxTokens,
       temperature: 0.7,
       messages: [
         { role: "system", content: systemPrompt },
@@ -48,7 +53,11 @@ async function callOnce(model: string, systemPrompt: string, userMessage: string
   return res;
 }
 
-async function callAI(systemPrompt: string, userMessage: string): Promise<string> {
+async function callAI(
+  systemPrompt: string,
+  userMessage: string,
+  maxTokens = 700,
+): Promise<string> {
   if (!OPENROUTER_API_KEY) {
     throw new Error("VITE_OPENROUTER_API_KEY is not set. Add it to your .env file.");
   }
@@ -62,7 +71,7 @@ async function callAI(systemPrompt: string, userMessage: string): Promise<string
     for (let attempt = 0; attempt < 2; attempt++) {
       let res: Response;
       try {
-        res = await callOnce(model, systemPrompt, userMessage);
+        res = await callOnce(model, systemPrompt, userMessage, maxTokens);
       } catch (err) {
         // Network-level failure — try the next model rather than retrying
         // the same one, in case that provider is fully down.
@@ -72,10 +81,19 @@ async function callAI(systemPrompt: string, userMessage: string): Promise<string
 
       if (res.ok) {
         const data = await res.json();
-        const text = data.choices?.[0]?.message?.content?.trim();
+        const choice = data.choices?.[0];
+        const text = choice?.message?.content?.trim();
         if (!text) {
           lastError = new Error("Empty response from AI.");
           break; // try next model
+        }
+        // If the model ran out of tokens mid-answer, the JSON (or bullet
+        // list) is likely cut off and unusable — treat it like a failure
+        // and fall through to the next model rather than returning
+        // truncated text that will fail to parse downstream.
+        if (choice?.finish_reason === "length") {
+          lastError = new Error("AI response was cut off before it finished.");
+          break;
         }
         return text;
       }
@@ -260,10 +278,11 @@ The JSON must follow this exact shape:
 
 Rules:
 - score: weight keyword matches (50%), quantified achievements (20%), relevant experience (20%), formatting/completeness (10%)
-- matchedKeywords: up to 12 specific skills/tools/qualifications from the JD that appear in the resume
-- missingKeywords: up to 10 important skills/tools/qualifications from the JD missing from the resume
-- suggestions: 3–5 specific, actionable improvements — be concrete, name the exact section and fix
+- matchedKeywords: up to 8 specific skills/tools/qualifications from the JD that appear in the resume
+- missingKeywords: up to 8 important skills/tools/qualifications from the JD missing from the resume
+- suggestions: exactly 3 specific, actionable improvements — be concrete but concise (under 20 words each for issue and fix)
 - verdict: honest, specific, under 15 words
+- Keep the entire JSON response compact — no extra whitespace or repeated information
 - Output raw JSON only — no text before or after it`;
 
   const user = `Job Description:
@@ -274,7 +293,7 @@ ${params.resumeText.slice(0, 3000)}
 
 Remember: respond with ONLY the JSON object described in the system prompt.`;
 
-  const raw = await callAI(system, user);
+  const raw = await callAI(system, user, 1200);
   const parsed = extractJSON<Partial<ATSResult>>(raw);
 
   // Normalise/validate shape so a partially-malformed response doesn't crash the UI
