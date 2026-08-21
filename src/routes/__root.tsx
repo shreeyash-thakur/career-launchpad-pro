@@ -8,7 +8,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
-import { AuthProvider } from "@/context/auth-context";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { AuthModal } from "@/components/auth/auth-modal";
 
 import appCss from "../styles.css?url";
