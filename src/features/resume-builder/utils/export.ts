@@ -15,37 +15,23 @@ function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * Forces the browser to run layout so the (possibly off-screen) export node
- * is fully laid out, and gives web fonts/images a moment to settle before we
- * screenshot it. Without this the capture can come back blank.
- */
 async function waitForLayoutAndFonts(node: HTMLElement) {
   if (document.fonts?.ready) {
     await Promise.race([document.fonts.ready, wait(1500)]);
   }
 
-  // Force a synchronous layout flush so the node has real dimensions even
-  // while positioned off-screen.
   void node.offsetHeight;
   void node.offsetWidth;
 
-  // Give the browser one more frame to paint layout changes.
   await new Promise<void>((resolve) => {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => resolve());
     });
   });
 
-  // Small settle delay for any async images (photos) or transitions.
   await wait(50);
 }
 
-/**
- * Renders `node` into a canvas using html2canvas. Returns the canvas, or
- * `null` if the capture produced an effectively blank page so we can retry
- * with more permissive options instead of shipping an empty file.
- */
 async function captureNode(
   node: HTMLElement,
   options: Partial<Html2CanvasOptions>,
@@ -54,11 +40,6 @@ async function captureNode(
   return isBlank(canvas) ? null : canvas;
 }
 
-/**
- * A cheap "is this page blank?" check. Samples a grid of pixels across the
- * whole canvas; if every sampled pixel is near-white (or transparent) we
- * treat the capture as empty and retry.
- */
 function isBlank(canvas: HTMLCanvasElement): boolean {
   let ctx: CanvasRenderingContext2D | null = null;
   try {
@@ -73,7 +54,7 @@ function isBlank(canvas: HTMLCanvasElement): boolean {
   try {
     data = ctx.getImageData(0, 0, width, height).data;
   } catch {
-    return false; // Tainted canvas — can't read pixels; assume not blank.
+    return false;
   }
 
   const step = 32;
@@ -101,16 +82,6 @@ async function captureWithRetry(node: HTMLElement): Promise<HTMLCanvasElement> {
     useCORS: true,
   };
   const fallbackOptions: Partial<Html2CanvasOptions>[] = [
-    // html2canvas's default strategy clones the whole document into a
-    // temporary iframe and then locates our node inside that clone by
-    // walking DOM child indices. Anything elsewhere on the page that
-    // mutates the DOM while that clone is being built/loaded (Framer
-    // Motion enter/exit animations, toasts, autosave re-renders, etc.)
-    // can shift those indices and make html2canvas throw "Unable to find
-    // element in cloned iframe" — or silently capture a blank page if the
-    // clone's fonts/images hadn't finished painting yet. Rendering via an
-    // inline SVG <foreignObject> instead avoids the clone-and-walk step
-    // entirely, so it isn't vulnerable to that race. Try it first.
     { ...baseOptions, foreignObjectRendering: true },
     baseOptions,
     { ...baseOptions, scale: 1 },
@@ -140,9 +111,6 @@ async function captureWithRetry(node: HTMLElement): Promise<HTMLCanvasElement> {
 }
 
 function sliceIntoPages(source: HTMLCanvasElement, pageWidthPx: number, pageHeightPx: number) {
-  // A tiny tolerance (matching the on-screen preview's own fit-check) so a
-  // resume that overflows the last page by a couple of stray pixels doesn't
-  // spawn an extra, almost-empty page.
   const pageCount = Math.max(1, Math.ceil(source.height / pageHeightPx - 0.01));
   const pages: HTMLCanvasElement[] = [];
 
@@ -153,9 +121,6 @@ function sliceIntoPages(source: HTMLCanvasElement, pageWidthPx: number, pageHeig
     const ctx = page.getContext("2d");
     if (!ctx) continue;
 
-    // White backdrop first: the last page is usually shorter than a full
-    // page's worth of content, and this fills the remainder cleanly instead
-    // of leaving a transparent/black gap.
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, page.width, page.height);
 
@@ -191,16 +156,15 @@ function downloadBlob(blob: Blob, filename: string) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  // Give the browser a moment to actually start the download before revoking.
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-/**
- * Captures a resume page node (rendered at its natural, unscaled size — not
- * the zoomed/scaled preview) and turns it into an actual downloadable file:
- * a real multi-page PDF, or one PNG/JPG per page. This never opens the
- * browser's print dialog, so it behaves identically on mobile and desktop.
- */
+export function printResume(pageSize?: PageSize) {
+  if (typeof window !== "undefined") {
+    window.print();
+  }
+}
+
 export async function downloadResume(
   node: HTMLElement,
   pageSize: PageSize,
@@ -249,8 +213,6 @@ export async function downloadResume(
     const blob = await canvasToBlob(page, mime, format === "jpg" ? 0.95 : undefined);
     const filename = pages.length > 1 ? `${safeName}-page-${i + 1}.${ext}` : `${safeName}.${ext}`;
     downloadBlob(blob, filename);
-    // Most browsers block/flag rapid back-to-back downloads as a popup
-    // storm; a short gap keeps every page landing in the Downloads folder.
     if (i < pages.length - 1) await wait(300);
   }
 }

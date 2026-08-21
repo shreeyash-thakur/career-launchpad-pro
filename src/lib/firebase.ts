@@ -1,5 +1,5 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -11,22 +11,45 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:123456789012:web:abcdef123456",
 };
 
+export function isFirebaseConfigured(): boolean {
+  const key = import.meta.env.VITE_FIREBASE_API_KEY;
+  return Boolean(key && !key.startsWith("AIzaSyDemo") && key !== "YOUR_API_KEY");
+}
+
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
 
-// Only initialize Firebase in browser environments
 if (typeof window !== "undefined") {
   try {
     app = getApps().length > 0 ? getApps()[0]! : initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
   } catch (err) {
-    console.warn(
-      "[Firebase] Initialization notice (using safe offline layer if live config is missing):",
-      err,
-    );
+    console.warn("[Firebase] Initialization notice:", err);
   }
+}
+
+export const googleProvider = new GoogleAuthProvider();
+
+export function getFirebaseAuth(): Auth {
+  if (!auth) {
+    if (!app) {
+      app = getApps().length > 0 ? getApps()[0]! : initializeApp(firebaseConfig);
+    }
+    auth = getAuth(app);
+  }
+  return auth;
+}
+
+export function getFirebaseDb(): Firestore {
+  if (!db) {
+    if (!app) {
+      app = getApps().length > 0 ? getApps()[0]! : initializeApp(firebaseConfig);
+    }
+    db = getFirestore(app);
+  }
+  return db;
 }
 
 export { app, auth, db };
