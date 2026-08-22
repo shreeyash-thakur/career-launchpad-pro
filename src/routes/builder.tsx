@@ -25,7 +25,7 @@ import { TemplatePicker } from "@/features/resume-builder/components/template-pi
 import { CustomizePanel } from "@/features/resume-builder/components/customize-panel";
 import { ResumePreview } from "@/features/resume-builder/components/resume-preview";
 import { getTemplate } from "@/features/resume-builder/templates";
-import { Sparkles, X, AlertTriangle, ArrowLeft, Loader2 } from "lucide-react";
+import { Sparkles, X, AlertTriangle, ArrowLeft, Loader2, FileEdit, Eye } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { ResumeService, type FirestoreResume } from "@/lib/resume-service";
 import { Button } from "@/components/ui/button";
@@ -63,6 +63,7 @@ function BuilderPage() {
   const [docError, setDocError] = useState<string | null>(null);
   const [loadedResume, setLoadedResume] = useState<FirestoreResume | null>(null);
   const [showBanner, setShowBanner] = useState(false);
+  const [mobileView, setMobileView] = useState<"edit" | "preview">("edit");
   const appliedRef = useRef(false);
 
   // Fetch Firestore resume if resumeId provided
@@ -229,8 +230,42 @@ function BuilderPage() {
         isCloudSynced={Boolean(search.resumeId && user?.uid)}
       />
 
+      {/* Mobile Edit/Preview toggle — desktop shows both panels side by side,
+          but stacking two full-height scrollable panels on a phone produces
+          a broken double-scroll layout, so mobile shows one at a time. */}
+      <div className="no-print flex shrink-0 border-b border-border bg-background lg:hidden">
+        <button
+          type="button"
+          onClick={() => setMobileView("edit")}
+          className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition-colors ${
+            mobileView === "edit"
+              ? "border-b-2 border-primary text-primary"
+              : "border-b-2 border-transparent text-muted-foreground"
+          }`}
+        >
+          <FileEdit className="size-3.5" />
+          Edit
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileView("preview")}
+          className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition-colors ${
+            mobileView === "preview"
+              ? "border-b-2 border-primary text-primary"
+              : "border-b-2 border-transparent text-muted-foreground"
+          }`}
+        >
+          <Eye className="size-3.5" />
+          Preview
+        </button>
+      </div>
+
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[420px_1fr]">
-        <div className="no-print no-print-clip order-2 min-h-0 overflow-y-auto border-r border-border bg-background lg:order-1">
+        <div
+          className={`no-print no-print-clip min-h-0 overflow-y-auto border-r border-border bg-background lg:order-1 lg:block ${
+            mobileView === "edit" ? "block" : "hidden"
+          }`}
+        >
           <Tabs defaultValue="content" className="flex h-full flex-col">
             <div className="border-b border-border px-4 pt-3">
               <TabsList className="w-full">
@@ -380,7 +415,11 @@ function BuilderPage() {
           </Tabs>
         </div>
 
-        <div className="order-1 min-h-0 overflow-hidden lg:order-2">
+        <div
+          className={`min-h-0 overflow-hidden lg:order-2 lg:block ${
+            mobileView === "preview" ? "block" : "hidden"
+          }`}
+        >
           <ResumePreview data={data} style={style} onStyleChange={setStyle} />
         </div>
       </div>

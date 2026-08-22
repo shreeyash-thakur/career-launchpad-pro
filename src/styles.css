@@ -163,6 +163,7 @@
   html {
     scroll-behavior: smooth;
     color-scheme: light;
+    overflow-x: hidden;
   }
 
   body {
@@ -170,6 +171,7 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
   }
 
   h1,
@@ -280,4 +282,3 @@
     scroll-behavior: auto !important;
   }
 }
-

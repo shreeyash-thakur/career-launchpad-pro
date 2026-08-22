@@ -148,8 +148,10 @@ export function BuilderToolbar({
           </div>
         </div>
 
-        {/* Center: Save status & Completion score */}
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        {/* Center: Save status & Completion score — hidden on the smallest
+            screens since the title, undo/redo, and download controls
+            already compete for space there. */}
+        <div className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground">
           <div className="flex items-center gap-1">
             {status === "saving" ? (
               <>
