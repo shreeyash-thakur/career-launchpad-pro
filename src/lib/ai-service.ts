@@ -251,12 +251,79 @@ ${params.existingDescription ? `Existing description (improve it): ${params.exis
 export interface ATSResult {
   score: number; // 0–100
   verdict: string; // one-line summary e.g. "Strong match — a few keywords missing"
-  matchedKeywords: string[]; // keywords from JD found in resume
-  missingKeywords: string[]; // important JD keywords absent from resume
+  matchedKeywords: string[]; // keywords found/present (role-relevant terms in general mode)
+  missingKeywords: string[]; // important keywords absent (gaps in general mode, JD gaps in match mode)
   suggestions: { section: string; issue: string; fix: string }[]; // actionable fixes
 }
 
-export async function checkATSScore(params: {
+function normalizeATSResult(parsed: Partial<ATSResult>): ATSResult {
+  return {
+    score: typeof parsed.score === "number" ? Math.max(0, Math.min(100, Math.round(parsed.score))) : 0,
+    verdict: typeof parsed.verdict === "string" ? parsed.verdict : "Couldn't fully analyse the resume — please try again.",
+    matchedKeywords: Array.isArray(parsed.matchedKeywords) ? parsed.matchedKeywords.map(String) : [],
+    missingKeywords: Array.isArray(parsed.missingKeywords) ? parsed.missingKeywords.map(String) : [],
+    suggestions: Array.isArray(parsed.suggestions)
+      ? parsed.suggestions
+          .filter((s): s is { section: string; issue: string; fix: string } => !!s && typeof s === "object")
+          .map((s) => ({
+            section: String(s.section ?? "General"),
+            issue: String(s.issue ?? ""),
+            fix: String(s.fix ?? ""),
+          }))
+      : [],
+  };
+}
+
+/**
+ * Stage 1 — general ATS-friendliness check, no job description required.
+ * Scores how well an ATS (and a recruiter skimming it) can parse and
+ * evaluate the resume on its own: structure, quantified impact, standard
+ * section usage, and role-appropriate keyword density for whatever role
+ * the resume itself indicates (from the person's title/experience).
+ */
+export async function checkGeneralATSScore(params: {
+  resumeText: string;
+}): Promise<ATSResult> {
+  const system = `You are an expert ATS (Applicant Tracking System) analyser and resume coach.
+
+Respond with ONLY a single JSON object. Do not include any explanation, preamble, commentary, or markdown code fences before or after it. Your entire response must start with { and end with }.
+
+The JSON must follow this exact shape:
+{
+  "score": <integer 0-100>,
+  "verdict": "<one sentence summary of overall ATS-friendliness>",
+  "matchedKeywords": ["<strong role-relevant keyword/skill already present>", ...],
+  "missingKeywords": ["<important keyword/skill a resume in this role would typically need but is missing>", ...],
+  "suggestions": [
+    { "section": "<section name>", "issue": "<what is wrong>", "fix": "<specific fix>" },
+    ...
+  ]
+}
+
+Rules:
+- Infer the target role from the resume's own title/experience — there is no job description to compare against.
+- score: weight structure & parseability (30%), quantified achievements (30%), role-relevant keyword strength (25%), completeness of standard sections (15%)
+- matchedKeywords: up to 8 strong, specific skills/keywords already well-represented in the resume for its inferred role
+- missingKeywords: up to 8 important skills/keywords typically expected for this role that are absent or weak
+- suggestions: exactly 3 specific, actionable improvements — be concrete but concise (under 20 words each for issue and fix)
+- verdict: honest, specific, under 15 words
+- Keep the entire JSON response compact — no extra whitespace or repeated information
+- Output raw JSON only — no text before or after it`;
+
+  const user = `Resume:
+${params.resumeText.slice(0, 4000)}
+
+Remember: respond with ONLY the JSON object described in the system prompt.`;
+
+  const raw = await callAI(system, user, 1200);
+  return normalizeATSResult(extractJSON<Partial<ATSResult>>(raw));
+}
+
+/**
+ * Stage 2 — job-specific match score once the person supplies a real job
+ * description. Compares the resume directly against that JD's requirements.
+ */
+export async function checkJobMatchATSScore(params: {
   resumeText: string;
   jobDescription: string;
 }): Promise<ATSResult> {
@@ -294,25 +361,11 @@ ${params.resumeText.slice(0, 3000)}
 Remember: respond with ONLY the JSON object described in the system prompt.`;
 
   const raw = await callAI(system, user, 1200);
-  const parsed = extractJSON<Partial<ATSResult>>(raw);
-
-  // Normalise/validate shape so a partially-malformed response doesn't crash the UI
-  return {
-    score: typeof parsed.score === "number" ? Math.max(0, Math.min(100, Math.round(parsed.score))) : 0,
-    verdict: typeof parsed.verdict === "string" ? parsed.verdict : "Couldn't fully analyse the match — please try again.",
-    matchedKeywords: Array.isArray(parsed.matchedKeywords) ? parsed.matchedKeywords.map(String) : [],
-    missingKeywords: Array.isArray(parsed.missingKeywords) ? parsed.missingKeywords.map(String) : [],
-    suggestions: Array.isArray(parsed.suggestions)
-      ? parsed.suggestions
-          .filter((s): s is { section: string; issue: string; fix: string } => !!s && typeof s === "object")
-          .map((s) => ({
-            section: String(s.section ?? "General"),
-            issue: String(s.issue ?? ""),
-            fix: String(s.fix ?? ""),
-          }))
-      : [],
-  };
+  return normalizeATSResult(extractJSON<Partial<ATSResult>>(raw));
 }
+
+/** @deprecated Use checkJobMatchATSScore. Kept as an alias to avoid breaking existing imports. */
+export const checkATSScore = checkJobMatchATSScore;
 
 // ─── Resume to plain text ────────────────────────────────────────────────────
 

@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
-  Download,
   Redo2,
   Undo2,
   FileJson,
@@ -29,9 +28,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { ResumeData, ResumeStyle } from "../types";
 import type { SaveStatus } from "../hooks/use-resume-store";
-import { downloadJson, printResume, readJsonFile } from "../utils/export";
+import { downloadJson, readJsonFile, type ExportFormat } from "../utils/export";
 import { calculateResumeCompletion } from "../utils/completion";
 import { ResumeReadyModal } from "./resume-ready-modal";
+import { DownloadMenu } from "./download-menu";
+import { useResumeExport } from "./resume-export-surface";
+import { toast } from "sonner";
 
 interface Props {
   title: string;
@@ -70,6 +72,12 @@ export function BuilderToolbar({
 
   const completion = calculateResumeCompletion(data);
 
+  const { ExportSurface, download, exporting } = useResumeExport(
+    data,
+    style,
+    title || data.personal.fullName || "resume",
+  );
+
   async function handleImport(file: File | undefined) {
     if (!file) return;
     try {
@@ -82,13 +90,18 @@ export function BuilderToolbar({
     }
   }
 
-  const handleDownload = () => {
-    printResume(style.pageSize);
-    // Show resume ready modal
-    setTimeout(() => {
-      setReadyModalOpen(true);
-    }, 400);
-  };
+  async function handleDownload(format: ExportFormat) {
+    try {
+      await download(format);
+      setTimeout(() => {
+        setReadyModalOpen(true);
+      }, 300);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Couldn't generate the download. Please try again.",
+      );
+    }
+  }
 
   return (
     <>
@@ -254,16 +267,11 @@ export function BuilderToolbar({
             </Link>
           </Button>
 
-          <Button
-            variant="hero"
-            size="sm"
-            className="gap-1.5 font-semibold shadow-[var(--shadow-glow)]"
-            onClick={handleDownload}
-          >
-            <Download className="size-3.5" /> Download PDF
-          </Button>
+          <DownloadMenu onDownload={handleDownload} exporting={exporting} size="compact" />
         </div>
       </div>
+
+      <ExportSurface />
 
       <ResumeReadyModal
         open={readyModalOpen}
