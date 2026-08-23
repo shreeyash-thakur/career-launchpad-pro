@@ -15,7 +15,7 @@ export function Hero() {
   const copyY = useTransform(scrollYProgress, [0, 1], [0, 60]);
   const copyOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
 
-  const { user, openAuthModal } = useAuth();
+  const { user, loading, openAuthModal } = useAuth();
   const navigate = useNavigate();
 
   const handleCreateMyResume = () => {
@@ -46,7 +46,9 @@ export function Hero() {
             variants={fadeUp}
             className="glass inline-flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-4 text-xs"
           >
-            {user ? (
+            {loading ? (
+              <span className="h-5 w-56 animate-pulse rounded-full bg-secondary" aria-hidden />
+            ) : user ? (
               <>
                 <span className="rounded-full bg-[image:var(--gradient-emerald)] px-2.5 py-1 font-semibold text-primary-foreground">
                   Welcome back
@@ -84,7 +86,12 @@ export function Hero() {
           </motion.p>
 
           <motion.div variants={fadeUp} className="flex flex-wrap items-center gap-3">
-            {user ? (
+            {loading ? (
+              <div className="flex flex-wrap items-center gap-3" aria-hidden>
+                <div className="h-[52px] w-52 animate-pulse rounded-2xl bg-secondary" />
+                <div className="h-[52px] w-48 animate-pulse rounded-2xl bg-secondary" />
+              </div>
+            ) : user ? (
               <>
                 <Button
                   variant="hero"

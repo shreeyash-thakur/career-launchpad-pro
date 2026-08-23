@@ -48,15 +48,30 @@ export function CtaBanner() {
           variants={fadeUp}
           className="relative text-balance text-3xl font-semibold sm:text-5xl"
         >
-          {user ? "Ready to keep building?" : "Your next role deserves a better first impression."}
+          {loading ? (
+            <span className="inline-block h-9 w-72 max-w-full animate-pulse rounded-xl bg-secondary align-middle" aria-hidden />
+          ) : user ? (
+            "Ready to keep building?"
+          ) : (
+            "Your next role deserves a better first impression."
+          )}
         </motion.h2>
         <motion.p variants={fadeUp} className="relative max-w-xl text-muted-foreground">
-          {user
-            ? "Jump back into your resumes, or start a fresh one for your next application."
-            : "Start with a template, make it yours, export in a click. Free to begin, no card needed."}
+          {loading ? (
+            <span className="inline-block h-5 w-80 max-w-full animate-pulse rounded-lg bg-secondary align-middle" aria-hidden />
+          ) : user ? (
+            "Jump back into your resumes, or start a fresh one for your next application."
+          ) : (
+            "Start with a template, make it yours, export in a click. Free to begin, no card needed."
+          )}
         </motion.p>
         <motion.div variants={fadeUp} className="relative flex flex-wrap justify-center gap-3">
-          {user ? (
+          {loading ? (
+            <div className="flex flex-wrap justify-center gap-3" aria-hidden>
+              <div className="h-[52px] w-52 animate-pulse rounded-2xl bg-secondary" />
+              <div className="h-[52px] w-44 animate-pulse rounded-2xl bg-secondary" />
+            </div>
+          ) : user ? (
             <>
               <Button variant="hero" size="xl" className="gap-2" asChild>
                 <Link to="/dashboard">

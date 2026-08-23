@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth-context";
 
 export function Navbar() {
-  const { user, openAuthModal, signOut } = useAuth();
+  const { user, loading, openAuthModal, signOut } = useAuth();
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
@@ -85,7 +85,7 @@ export function Navbar() {
               </a>
             </li>
           ))}
-          {user && (
+          {!loading && user && (
             <li>
               <Link
                 to="/dashboard"
@@ -100,7 +100,15 @@ export function Navbar() {
 
         {/* Right Actions */}
         <div className="hidden items-center gap-2 md:flex">
-          {!user ? (
+          {loading ? (
+            // Neutral skeleton while Firebase resolves auth state — avoids
+            // flashing the logged-out CTA before switching to the logged-in
+            // one a moment later.
+            <div className="flex items-center gap-2" aria-hidden>
+              <div className="h-8 w-16 animate-pulse rounded-xl bg-secondary" />
+              <div className="h-8 w-32 animate-pulse rounded-xl bg-secondary" />
+            </div>
+          ) : !user ? (
             <>
               <Button
                 variant="ghost"
@@ -218,7 +226,7 @@ export function Navbar() {
                   </a>
                 </li>
               ))}
-              {user && (
+              {!loading && user && (
                 <li>
                   <Link
                     to="/dashboard"
@@ -233,7 +241,12 @@ export function Navbar() {
             </ul>
 
             <div className="mt-4 flex flex-col gap-2 pt-3 border-t border-border/60">
-              {!user ? (
+              {loading ? (
+                <div className="flex flex-col gap-2" aria-hidden>
+                  <div className="h-10 w-full animate-pulse rounded-xl bg-secondary" />
+                  <div className="h-10 w-full animate-pulse rounded-xl bg-secondary" />
+                </div>
+              ) : !user ? (
                 <>
                   <Button
                     variant="outline"
