@@ -136,7 +136,7 @@ export function ResumeHealthReportCard({
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display text-sm font-bold">Resume Health</h3>
           <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
-            <ShieldCheck className="size-3" /> 80% deterministic scoring
+            <ShieldCheck className="size-3" /> 100% deterministic — reproducible
           </span>
         </div>
         <div className="flex flex-col items-center gap-4 sm:flex-row sm:gap-6">
@@ -152,11 +152,6 @@ export function ResumeHealthReportCard({
               <VerdictIcon className="size-3.5" />
               {verdict.label}
             </span>
-            {result.aiDegraded && (
-              <p className="text-[11px] text-amber-600 mb-1">
-                AI analysis was unavailable — this score reflects deterministic checks only.
-              </p>
-            )}
             {selected && (
               <Button variant="outline" size="sm" className="mt-1 gap-1.5 text-xs" asChild>
                 <Link
@@ -211,47 +206,6 @@ export function ResumeHealthReportCard({
                   <span>🟢</span> {p}
                 </p>
               ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Keyword analysis */}
-      {(result.matchedKeywords.length > 0 || result.missingKeywords.length > 0) && (
-        <div className="rounded-3xl border border-border bg-card p-6 space-y-4">
-          <h3 className="font-display text-sm font-bold">Keyword Analysis</h3>
-          {result.matchedKeywords.length > 0 && (
-            <div>
-              <div className="flex items-center gap-1.5 mb-2 text-xs font-semibold text-emerald-600">
-                <CheckCircle2 className="size-3.5" /> Strong ({result.matchedKeywords.length})
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {result.matchedKeywords.map((kw) => (
-                  <span
-                    key={kw}
-                    className="rounded-lg bg-emerald-500/15 border border-emerald-500/25 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300"
-                  >
-                    {kw}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {result.missingKeywords.length > 0 && (
-            <div>
-              <div className="flex items-center gap-1.5 mb-2 text-xs font-semibold text-red-600">
-                <XCircle className="size-3.5" /> Missing ({result.missingKeywords.length})
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {result.missingKeywords.map((kw) => (
-                  <span
-                    key={kw}
-                    className="rounded-lg bg-red-500/15 border border-red-500/25 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300"
-                  >
-                    {kw}
-                  </span>
-                ))}
-              </div>
             </div>
           )}
         </div>

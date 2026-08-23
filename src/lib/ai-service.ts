@@ -125,46 +125,6 @@ ${data.existingDescription ? `Existing description (improve it): ${data.existing
     return callAI(system, user);
   });
 
-const checkGeneralATSScoreFn = createServerFn({ method: "POST" })
-  .validator(z.object({ uid: z.string().optional(), resumeText: z.string() }))
-  .handler(async ({ data }) => {
-    const { callAI, parseATSResult, checkRateLimit } = await import("@/lib/ai-server");
-    checkRateLimit(data.uid ?? "anonymous");
-    const system = `You are an expert ATS (Applicant Tracking System) analyser and resume coach.
-
-Respond with ONLY a single JSON object. Do not include any explanation, preamble, commentary, or markdown code fences before or after it. Your entire response must start with { and end with }.
-
-The JSON must follow this exact shape:
-{
-  "score": <integer 0-100>,
-  "verdict": "<one sentence summary of overall ATS-friendliness>",
-  "matchedKeywords": ["<strong role-relevant keyword/skill already present>", ...],
-  "missingKeywords": ["<important keyword/skill a resume in this role would typically need but is missing>", ...],
-  "suggestions": [
-    { "section": "<section name>", "issue": "<what is wrong>", "fix": "<specific fix>" },
-    ...
-  ]
-}
-
-Rules:
-- Infer the target role from the resume's own title/experience — there is no job description to compare against.
-- score: weight structure & parseability (30%), quantified achievements (30%), role-relevant keyword strength (25%), completeness of standard sections (15%)
-- matchedKeywords: up to 8 strong, specific skills/keywords already well-represented in the resume for its inferred role
-- missingKeywords: up to 8 important skills/keywords typically expected for this role that are absent or weak
-- suggestions: exactly 3 specific, actionable improvements — be concrete but concise (under 20 words each for issue and fix)
-- verdict: honest, specific, under 15 words
-- Keep the entire JSON response compact — no extra whitespace or repeated information
-- Output raw JSON only — no text before or after it`;
-
-    const user = `Resume:
-${data.resumeText.slice(0, 4000)}
-
-Remember: respond with ONLY the JSON object described in the system prompt.`;
-
-    const raw = await callAI(system, user, 1200);
-    return parseATSResult(raw);
-  });
-
 const checkJobMatchATSScoreFn = createServerFn({ method: "POST" })
   .validator(
     z.object({ uid: z.string().optional(), resumeText: z.string(), jobDescription: z.string() }),
@@ -172,7 +132,7 @@ const checkJobMatchATSScoreFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { callAI, parseATSResult, checkRateLimit } = await import("@/lib/ai-server");
     checkRateLimit(data.uid ?? "anonymous");
-    const system = `You are an expert ATS (Applicant Tracking System) analyser and resume coach.
+    const system = `You are an expert ATS (Applicant Tracking System) analyser and resume coach performing a SEMANTIC comparison between a resume and a job description — not a literal text match.
 
 Respond with ONLY a single JSON object. Do not include any explanation, preamble, commentary, or markdown code fences before or after it. Your entire response must start with { and end with }.
 
@@ -189,10 +149,12 @@ The JSON must follow this exact shape:
 }
 
 Rules:
-- score: weight keyword matches (50%), quantified achievements (20%), relevant experience (20%), formatting/completeness (10%)
-- matchedKeywords: up to 8 specific skills/tools/qualifications from the JD that appear in the resume
-- missingKeywords: up to 8 important skills/tools/qualifications from the JD missing from the resume
-- suggestions: exactly 3 specific, actionable improvements — be concrete but concise (under 20 words each for issue and fix)
+- score: weight semantic skill/requirement match (50%), quantified achievements (20%), relevant experience (20%), formatting/completeness (10%)
+- Treat skills as matched if they are semantically or practically equivalent, even if worded differently — e.g. "JS" = "JavaScript", "K8s" = "Kubernetes", "led a team" satisfies a "leadership" requirement, "built REST endpoints" satisfies an "API development" requirement. Do not mark something missing just because the exact JD wording isn't present verbatim.
+- Conversely, do not mark a skill matched on a superficial word match alone if the resume's actual context means something different (e.g. "Java" resume experience does not satisfy a "JavaScript" requirement).
+- matchedKeywords: up to 8 specific skills/tools/qualifications from the JD that the resume genuinely satisfies (in the resume's own wording, not the JD's)
+- missingKeywords: up to 8 important skills/tools/qualifications from the JD that the resume does not satisfy, even after accounting for synonyms and equivalent phrasing
+- suggestions: exactly 3 specific, actionable improvements — be concrete but concise (under 20 words each for issue and fix). Never suggest claiming a skill the resume doesn't support.
 - verdict: honest, specific, under 15 words
 - Keep the entire JSON response compact — no extra whitespace or repeated information
 - Output raw JSON only — no text before or after it`;
@@ -206,7 +168,18 @@ ${data.resumeText.slice(0, 3000)}
 Remember: respond with ONLY the JSON object described in the system prompt.`;
 
     const raw = await callAI(system, user, 1200);
-    return parseATSResult(raw);
+    const result = parseATSResult(raw);
+    // Deterministic cleanup pass: collapse any synonym duplicates the model
+    // still listed separately (e.g. "JS" in matched and "JavaScript" in
+    // missing) using the static synonym table — cheap, exact, and doesn't
+    // cost another AI call.
+    const { dedupeSkillsBySynonym } =
+      await import("@/features/resume-builder/utils/skill-synonyms");
+    return {
+      ...result,
+      matchedKeywords: dedupeSkillsBySynonym(result.matchedKeywords),
+      missingKeywords: dedupeSkillsBySynonym(result.missingKeywords, result.matchedKeywords),
+    };
   });
 
 const suggestSkillsFn = createServerFn({ method: "POST" })
@@ -236,39 +209,39 @@ ${data.existingSkills?.length ? `Already has: ${data.existingSkills.join(", ")}`
     return parseStringArray(raw, 10);
   });
 
-const analyzeResumeSemanticFn = createServerFn({ method: "POST" })
+const parseResumeTextFn = createServerFn({ method: "POST" })
   .validator(z.object({ uid: z.string().optional(), resumeText: z.string() }))
   .handler(async ({ data }) => {
-    const { callAI, parseResumeSemanticResult, checkRateLimit } = await import("@/lib/ai-server");
+    const { callAI, parseParsedResume, checkRateLimit } = await import("@/lib/ai-server");
     checkRateLimit(data.uid ?? "anonymous");
-    const system = `You are an expert resume coach. Structural/factual checks (sections, dates, contact info, bullet length) have already been scored separately by a rule-based system — do NOT re-score those. Your job is purely semantic: keyword strength for the inferred role, and prose quality.
+    const system = `You extract structured resume data from raw resume text (extracted from an uploaded PDF/DOCX, so spacing and line breaks may be imperfect).
 
 Respond with ONLY a single JSON object, no explanation, no markdown fences. Your entire response must start with { and end with }.
 
 {
-  "keywordScore": <number 0-10, how strong is role-relevant keyword coverage>,
-  "contentScore": <number 0-10, quality/impact/clarity of the writing>,
-  "matchedKeywords": ["<strong role-relevant keyword already present>", ...],
-  "missingKeywords": ["<important keyword typically expected for this role but absent>", ...],
-  "strengths": ["<specific genuine strength>", ...],
-  "criticalProblems": ["<specific significant weakness, e.g. generic summary, vague bullets>", ...],
-  "improvements": ["<specific actionable improvement>", ...]
+  "personal": { "fullName": "", "title": "", "email": "", "phone": "", "location": "", "website": "", "linkedin": "", "github": "" },
+  "summary": "",
+  "experience": [{ "role": "", "company": "", "location": "", "startDate": "", "endDate": "", "current": false, "bullets": [] }],
+  "education": [{ "school": "", "degree": "", "field": "", "startDate": "", "endDate": "", "gpa": "", "details": "" }],
+  "skills": [{ "category": "", "items": [] }],
+  "projects": [{ "name": "", "description": "", "tech": [], "link": "" }],
+  "certifications": [{ "name": "", "issuer": "", "date": "" }],
+  "uncertainFields": []
 }
 
-Rules:
-- Infer the target role from the resume's own title/experience.
-- matchedKeywords / missingKeywords: up to 8 each.
-- strengths: 2-4 items, specific to this resume, not generic praise.
-- criticalProblems: 0-4 items, only include genuine problems.
-- improvements: 2-4 items, concrete and actionable.
-- Never invent facts, numbers, or skills not present in the resume text.
-- Keep every string under 20 words.
-- Output raw JSON only.`;
+CRITICAL RULES — this is the most important part of your job:
+- NEVER invent, guess, or fill in anything not clearly present in the text. If a field isn't in the text, leave it as an empty string or empty array.
+- NEVER invent company names, job titles, dates, metrics, technologies, or achievements.
+- Dates: use whatever format the source uses (e.g. "2022-03", "Mar 2022", "2022"); do not normalize or guess a missing day/month.
+- "current": true only if the text explicitly says "Present", "Current", or equivalent for that role.
+- If you're genuinely unsure whether something extracted correctly (e.g. text was garbled, a date is ambiguous, a bullet might belong to a different role), still include your best-effort extraction but add a short plain-English description of the uncertainty to "uncertainFields" (e.g. "End date for the Acme Corp role is ambiguous", "Could not confidently split skills into categories").
+- Skills: group into categories only if the source text itself groups them (e.g. "Languages: ...", "Tools: ..."); otherwise put everything in one group with an empty category name.
+- Output raw JSON only — no text before or after it.`;
 
-    const user = `Resume:\n${data.resumeText.slice(0, 4000)}\n\nRemember: respond with ONLY the JSON object described in the system prompt.`;
+    const user = `Resume text:\n${data.resumeText.slice(0, 6000)}\n\nRemember: respond with ONLY the JSON object described in the system prompt. Never fabricate information.`;
 
-    const raw = await callAI(system, user, 1200);
-    return parseResumeSemanticResult(raw);
+    const raw = await callAI(system, user, 2500);
+    return parseParsedResume(raw);
   });
 
 // ─── Public client API ───────────────────────────────────────────────────────
@@ -313,87 +286,62 @@ export async function generateProjectDescription(params: {
   return generateProjectDescriptionFn({ data: params });
 }
 
-/**
- * Stage 1 — general ATS-friendliness check, no job description required.
- * @deprecated Use analyzeResumeHealth for the deterministic + AI breakdown.
- * Kept as an alias so nothing calling the old single-score shape breaks.
- */
-export async function checkGeneralATSScore(params: {
-  uid?: string;
-  resumeText: string;
-}): Promise<ATSResult> {
-  return checkGeneralATSScoreFn({ data: params });
-}
-
-// ─── Resume Health (deterministic + bounded AI) ─────────────────────────────
+// ─── Resume Health (fully deterministic — no AI call) ───────────────────────
+// Earlier this blended in a bounded AI slice for "keyword relevance" and
+// "content quality". In practice a general, no-JD score can't judge keyword
+// relevance meaningfully anyway (relevant to *what* role, compared against
+// *what*?) — that comparison only makes sense once there's an actual job
+// description to match against, which is exactly what Stage 2 below does.
+// So the AI budget was moved there, where it's the right tool for the job:
+// semantic matching, skill-synonym reasoning, and content suggestions. This
+// scanner is now 100% deterministic — same resume, same score, always, with
+// no "AI unavailable" possibility at all.
 
 export interface ResumeHealthResult {
-  /** 0-100. 80 points deterministic (never varies for the same resume),
-   *  20 points from bounded AI semantic scoring (keyword + content). */
+  /** 0-100, fully deterministic — reruns on an unchanged resume always
+   *  produce the exact same score. */
   score: number;
   categories: CategoryScore[];
   checks: AtsCheck[];
-  matchedKeywords: string[];
-  missingKeywords: string[];
   strengths: string[];
   criticalProblems: string[];
   improvements: string[];
-  /** True if the AI portion failed and safe defaults were used — the
-   *  deterministic 80% of the score is still fully trustworthy either way. */
-  aiDegraded: boolean;
 }
 
 /**
- * The combined resume health score used by the ATS Scanner. Runs the
- * deterministic scorer locally (instant, reproducible) and layers a bounded
- * AI contribution (keyword relevance + content quality, capped at 10 points
- * each) on top. If the AI call fails, the deterministic 80/100 still comes
- * back with a neutral AI slice rather than failing the whole analysis.
+ * The resume health score used by the ATS Scanner's general (no-JD) check.
+ * Runs the deterministic scorer and derives strengths/problems/improvements
+ * straight from the check results — no network call, so it's instant and
+ * always reproducible.
  */
 export async function analyzeResumeHealth(params: {
-  uid?: string;
   resumeData: ResumeData;
 }): Promise<ResumeHealthResult> {
   const deterministic = scoreResumeDeterministic(params.resumeData);
-  const resumeText = resumeToText(params.resumeData);
 
-  let semantic;
-  let aiDegraded = false;
-  try {
-    semantic = await analyzeResumeSemanticFn({ data: { uid: params.uid, resumeText } });
-  } catch {
-    aiDegraded = true;
-    semantic = {
-      keywordScore: 5,
-      contentScore: 5,
-      matchedKeywords: [],
-      missingKeywords: [],
-      strengths: [],
-      criticalProblems: [],
-      improvements: [],
-    };
-  }
+  const criticalProblems = deterministic.checks
+    .filter((c) => c.severity === "fail")
+    .map((c) => c.detail ?? c.label)
+    .slice(0, 4);
 
-  const categories: CategoryScore[] = [
-    ...deterministic.categories,
-    { id: "keywordRelevance", label: "Keyword Relevance", score: semantic.keywordScore, max: 10 },
-    { id: "contentQuality", label: "Content Quality", score: semantic.contentScore, max: 10 },
-  ];
+  const improvements = deterministic.checks
+    .filter((c) => c.severity === "warn")
+    .map((c) => c.detail ?? c.label)
+    .slice(0, 4);
 
-  const score = Math.round(
-    Math.min(100, deterministic.score + semantic.keywordScore + semantic.contentScore),
-  );
+  const strengths = deterministic.categories
+    .filter((c) => c.max > 0 && c.score / c.max >= 0.85)
+    .sort((a, b) => b.score / b.max - a.score / a.max)
+    .slice(0, 3)
+    .map((c) => `Strong ${c.label.toLowerCase()}.`);
 
   return {
-    score,
-    categories,
+    score: deterministic.score,
+    categories: deterministic.categories,
     checks: deterministic.checks,
-    matchedKeywords: semantic.matchedKeywords,
-    missingKeywords: semantic.missingKeywords,
-    strengths: semantic.strengths,
-    criticalProblems: semantic.criticalProblems,
-    improvements: semantic.improvements,
-    aiDegraded,
+    strengths,
+    criticalProblems,
+    improvements,
   };
 }
 
@@ -417,6 +365,47 @@ export async function suggestSkills(params: {
   existingSkills?: string[];
 }): Promise<string[]> {
   return suggestSkillsFn({ data: params });
+}
+
+// ─── Upload & parse existing resume ─────────────────────────────────────────
+
+export interface UploadedResumeResult {
+  resumeData: ResumeData;
+  /** Plain-English notes on anything the AI wasn't confident about —
+   *  surfaced in the UI so the person double-checks before saving,
+   *  rather than the gap silently passing as a complete resume. */
+  uncertainFields: string[];
+}
+
+/**
+ * Turns already-extracted resume text (see extractTextFromResumeFile in
+ * features/resume-builder/utils/resume-file-parser.ts, which does the
+ * PDF/DOCX reading client-side) into a real, editable ResumeData object.
+ * Never fabricates — any field the model wasn't confident about is left
+ * empty and named in uncertainFields for the person to fill in themselves.
+ */
+export async function parseUploadedResume(params: {
+  uid?: string;
+  resumeText: string;
+}): Promise<UploadedResumeResult> {
+  const { makeId, blankResume } = await import("@/features/resume-builder/sample-data");
+  const parsed = await parseResumeTextFn({ data: params });
+  const base = blankResume();
+
+  const resumeData: ResumeData = {
+    ...base,
+    personal: { ...base.personal, ...parsed.personal, photo: "" },
+    summary: parsed.summary,
+    experience: parsed.experience.map((e) => ({ id: makeId("exp"), ...e })),
+    education: parsed.education.map((e) => ({ id: makeId("edu"), ...e })),
+    skills: parsed.skills
+      .filter((s) => s.items.length > 0)
+      .map((s) => ({ id: makeId("skl"), ...s })),
+    projects: parsed.projects.map((p) => ({ id: makeId("proj"), ...p })),
+    certifications: parsed.certifications.map((c) => ({ id: makeId("cert"), ...c })),
+  };
+
+  return { resumeData, uncertainFields: parsed.uncertainFields };
 }
 
 // ─── Resume to plain text ────────────────────────────────────────────────────

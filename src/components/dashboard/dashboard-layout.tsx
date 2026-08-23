@@ -27,6 +27,7 @@ import { AiToolsView } from "./ai-tools-view";
 import { AtsCheckerView } from "./ats-checker-view";
 import { ProfileView } from "./profile-view";
 import { SettingsView } from "./settings-view";
+import { UploadResumeDialog } from "./upload-resume-dialog";
 import { cn } from "@/lib/utils";
 
 type TabKey = "overview" | "resumes" | "templates" | "ats" | "ai-tools" | "profile" | "settings";
@@ -44,6 +45,7 @@ export function DashboardLayout({ initialTab }: Props) {
   const [resumes, setResumes] = useState<FirestoreResume[]>([]);
   const [loadingResumes, setLoadingResumes] = useState(true);
   const [atsPreselectId, setAtsPreselectId] = useState<string | undefined>(undefined);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
 
   const fetchResumes = useCallback(async () => {
     if (!user?.uid) {
@@ -98,6 +100,16 @@ export function DashboardLayout({ initialTab }: Props) {
       console.error("Failed to create new resume:", err);
       void navigate({ to: "/onboarding" });
     }
+  };
+
+  const handleResumeUploaded = (created: FirestoreResume) => {
+    void fetchResumes();
+    // The uploaded resume is already fully populated, so skip the
+    // onboarding questionnaire and go straight to the editor for review.
+    void navigate({
+      to: "/builder",
+      search: { resumeId: created.id, template: created.templateId },
+    });
   };
 
   const navItems: {
@@ -356,6 +368,7 @@ export function DashboardLayout({ initialTab }: Props) {
               onRefresh={fetchResumes}
               onCreateNew={handleCreateNewResume}
               onNavigateTab={(tab) => setActiveTab(tab as TabKey)}
+              onUploadResume={() => setUploadDialogOpen(true)}
             />
           )}
 
@@ -374,7 +387,10 @@ export function DashboardLayout({ initialTab }: Props) {
           {activeTab === "templates" && <TemplatesView onRefreshResumes={fetchResumes} />}
 
           {activeTab === "ats" && (
-            <AtsCheckerView resumes={resumes} {...(atsPreselectId ? { preselectId: atsPreselectId } : {})} />
+            <AtsCheckerView
+              resumes={resumes}
+              {...(atsPreselectId ? { preselectId: atsPreselectId } : {})}
+            />
           )}
 
           {activeTab === "ai-tools" && <AiToolsView />}
@@ -384,6 +400,13 @@ export function DashboardLayout({ initialTab }: Props) {
           {activeTab === "settings" && <SettingsView resumes={resumes} />}
         </main>
       </div>
+
+      <UploadResumeDialog
+        open={uploadDialogOpen}
+        onOpenChange={setUploadDialogOpen}
+        uid={user?.uid}
+        onCreated={handleResumeUploaded}
+      />
     </div>
   );
 }

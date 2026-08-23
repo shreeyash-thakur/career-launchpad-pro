@@ -214,32 +214,92 @@ export function parseATSResult(raw: string): ATSResult {
 }
 
 /**
- * Schema for the *semantic-only* slice of resume health analysis — keyword
- * strength and prose quality. Deliberately narrow: these two sub-scores are
- * capped at 10 points each (20 of the overall 100) by the caller in
- * ai-service.ts. The other 80 points come from the deterministic scorer in
- * features/resume-builder/utils/ats-score.ts and never touch the AI at all.
- * This keeps the AI's influence on the headline score bounded and the
- * result mostly reproducible, while still using it for the things a
- * rule-based checker genuinely can't judge — semantic keyword relevance and
- * writing quality.
+ * Schema for structuring an uploaded resume (PDF/DOCX, already extracted
+ * to plain text) into the app's ResumeData shape. IDs are intentionally
+ * absent here — the client assigns fresh IDs via makeId() when mapping
+ * this into a real ResumeData so there's never a collision risk.
+ *
+ * `uncertainFields` is mandatory scaffolding for the "never fabricate"
+ * requirement: the model is instructed to leave anything it isn't
+ * confident about as an empty string/array rather than guess, and to
+ * name what it left out here so the UI can flag it for the person to
+ * fill in themselves rather than silently presenting a gap as complete.
  */
-export const resumeSemanticSchema = z.object({
-  keywordScore: z.number().min(0).max(10).catch(5),
-  contentScore: z.number().min(0).max(10).catch(5),
-  matchedKeywords: z.array(z.string()).catch([]),
-  missingKeywords: z.array(z.string()).catch([]),
-  strengths: z.array(z.string()).catch([]),
-  criticalProblems: z.array(z.string()).catch([]),
-  improvements: z.array(z.string()).catch([]),
+const parsedExperienceSchema = z.object({
+  role: z.string().catch(""),
+  company: z.string().catch(""),
+  location: z.string().catch(""),
+  startDate: z.string().catch(""),
+  endDate: z.string().catch(""),
+  current: z.boolean().catch(false),
+  bullets: z.array(z.string()).catch([]),
 });
-export type ResumeSemanticResult = z.infer<typeof resumeSemanticSchema>;
 
-export function parseResumeSemanticResult(raw: string): ResumeSemanticResult {
+const parsedEducationSchema = z.object({
+  school: z.string().catch(""),
+  degree: z.string().catch(""),
+  field: z.string().catch(""),
+  startDate: z.string().catch(""),
+  endDate: z.string().catch(""),
+  gpa: z.string().catch(""),
+  details: z.string().catch(""),
+});
+
+const parsedSkillGroupSchema = z.object({
+  category: z.string().catch(""),
+  items: z.array(z.string()).catch([]),
+});
+
+const parsedProjectSchema = z.object({
+  name: z.string().catch(""),
+  description: z.string().catch(""),
+  tech: z.array(z.string()).catch([]),
+  link: z.string().catch(""),
+});
+
+const parsedCertificationSchema = z.object({
+  name: z.string().catch(""),
+  issuer: z.string().catch(""),
+  date: z.string().catch(""),
+});
+
+export const parsedResumeSchema = z.object({
+  personal: z
+    .object({
+      fullName: z.string().catch(""),
+      title: z.string().catch(""),
+      email: z.string().catch(""),
+      phone: z.string().catch(""),
+      location: z.string().catch(""),
+      website: z.string().catch(""),
+      linkedin: z.string().catch(""),
+      github: z.string().catch(""),
+    })
+    .catch({
+      fullName: "",
+      title: "",
+      email: "",
+      phone: "",
+      location: "",
+      website: "",
+      linkedin: "",
+      github: "",
+    }),
+  summary: z.string().catch(""),
+  experience: z.array(parsedExperienceSchema).catch([]),
+  education: z.array(parsedEducationSchema).catch([]),
+  skills: z.array(parsedSkillGroupSchema).catch([]),
+  projects: z.array(parsedProjectSchema).catch([]),
+  certifications: z.array(parsedCertificationSchema).catch([]),
+  uncertainFields: z.array(z.string()).catch([]),
+});
+export type ParsedResume = z.infer<typeof parsedResumeSchema>;
+
+export function parseParsedResume(raw: string): ParsedResume {
   const extracted = extractJSON<unknown>(raw);
-  const result = resumeSemanticSchema.safeParse(extracted);
+  const result = parsedResumeSchema.safeParse(extracted);
   if (result.success) return result.data;
-  return resumeSemanticSchema.parse({});
+  return parsedResumeSchema.parse({});
 }
 
 export function parseStringArray(raw: string, max: number): string[] {

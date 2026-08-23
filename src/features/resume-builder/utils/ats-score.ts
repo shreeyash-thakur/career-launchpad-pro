@@ -40,7 +40,9 @@ export interface DeterministicAtsResult {
   checks: AtsCheck[];
 }
 
-export const DETERMINISTIC_MAX = 80;
+export const DETERMINISTIC_MAX = 100;
+/** Raw internal weighting sums to this before being rescaled to 100. */
+const RAW_MAX = 80;
 
 const ACTION_VERBS = [
   "led",
@@ -487,15 +489,58 @@ export function scoreResumeDeterministic(data: ResumeData): DeterministicAtsResu
   const atsCompat = scoreAtsCompatibility(data, checks);
   const readability = scoreReadability(data, checks);
 
+  // Rescale from the raw 80-point internal weighting up to a clean 100,
+  // preserving relative category weights.
+  const scale = DETERMINISTIC_MAX / RAW_MAX;
   const categories: CategoryScore[] = [
-    { id: "atsCompatibility", label: "ATS Compatibility", score: round1(atsCompat), max: 15 },
-    { id: "structure", label: "Structure", score: round1(structure), max: 10 },
-    { id: "contact", label: "Contact Information", score: round1(contact), max: 5 },
-    { id: "skills", label: "Skills Relevance", score: round1(skills), max: 10 },
-    { id: "experience", label: "Experience Quality", score: round1(experience), max: 15 },
-    { id: "projects", label: "Project Quality", score: round1(projects), max: 10 },
-    { id: "education", label: "Education", score: round1(education), max: 5 },
-    { id: "readability", label: "Readability", score: round1(readability), max: 10 },
+    {
+      id: "atsCompatibility",
+      label: "ATS Compatibility",
+      score: round1(atsCompat * scale),
+      max: round1(15 * scale),
+    },
+    {
+      id: "structure",
+      label: "Structure",
+      score: round1(structure * scale),
+      max: round1(10 * scale),
+    },
+    {
+      id: "contact",
+      label: "Contact Information",
+      score: round1(contact * scale),
+      max: round1(5 * scale),
+    },
+    {
+      id: "skills",
+      label: "Skills Relevance",
+      score: round1(skills * scale),
+      max: round1(10 * scale),
+    },
+    {
+      id: "experience",
+      label: "Experience Quality",
+      score: round1(experience * scale),
+      max: round1(15 * scale),
+    },
+    {
+      id: "projects",
+      label: "Project Quality",
+      score: round1(projects * scale),
+      max: round1(10 * scale),
+    },
+    {
+      id: "education",
+      label: "Education",
+      score: round1(education * scale),
+      max: round1(5 * scale),
+    },
+    {
+      id: "readability",
+      label: "Readability",
+      score: round1(readability * scale),
+      max: round1(10 * scale),
+    },
   ];
 
   const score = round1(categories.reduce((sum, c) => sum + c.score, 0));
