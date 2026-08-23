@@ -14,6 +14,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { ResumeData } from "@/features/resume-builder/types";
+import {
+  scoreResumeDeterministic,
+  type AtsCheck,
+  type CategoryScore,
+} from "@/features/resume-builder/utils/ats-score";
 
 // ─── Server functions ────────────────────────────────────────────────────────
 // Defined here (not in ai-server.ts) so TanStack Start's compiler can see
@@ -161,7 +166,9 @@ Remember: respond with ONLY the JSON object described in the system prompt.`;
   });
 
 const checkJobMatchATSScoreFn = createServerFn({ method: "POST" })
-  .validator(z.object({ uid: z.string().optional(), resumeText: z.string(), jobDescription: z.string() }))
+  .validator(
+    z.object({ uid: z.string().optional(), resumeText: z.string(), jobDescription: z.string() }),
+  )
   .handler(async ({ data }) => {
     const { callAI, parseATSResult, checkRateLimit } = await import("@/lib/ai-server");
     checkRateLimit(data.uid ?? "anonymous");
@@ -203,7 +210,13 @@ Remember: respond with ONLY the JSON object described in the system prompt.`;
   });
 
 const suggestSkillsFn = createServerFn({ method: "POST" })
-  .validator(z.object({ uid: z.string().optional(), title: z.string(), existingSkills: z.array(z.string()).optional() }))
+  .validator(
+    z.object({
+      uid: z.string().optional(),
+      title: z.string(),
+      existingSkills: z.array(z.string()).optional(),
+    }),
+  )
   .handler(async ({ data }) => {
     const { callAI, parseStringArray, checkRateLimit } = await import("@/lib/ai-server");
     checkRateLimit(data.uid ?? "anonymous");
@@ -221,6 +234,41 @@ ${data.existingSkills?.length ? `Already has: ${data.existingSkills.join(", ")}`
 
     const raw = await callAI(system, user);
     return parseStringArray(raw, 10);
+  });
+
+const analyzeResumeSemanticFn = createServerFn({ method: "POST" })
+  .validator(z.object({ uid: z.string().optional(), resumeText: z.string() }))
+  .handler(async ({ data }) => {
+    const { callAI, parseResumeSemanticResult, checkRateLimit } = await import("@/lib/ai-server");
+    checkRateLimit(data.uid ?? "anonymous");
+    const system = `You are an expert resume coach. Structural/factual checks (sections, dates, contact info, bullet length) have already been scored separately by a rule-based system — do NOT re-score those. Your job is purely semantic: keyword strength for the inferred role, and prose quality.
+
+Respond with ONLY a single JSON object, no explanation, no markdown fences. Your entire response must start with { and end with }.
+
+{
+  "keywordScore": <number 0-10, how strong is role-relevant keyword coverage>,
+  "contentScore": <number 0-10, quality/impact/clarity of the writing>,
+  "matchedKeywords": ["<strong role-relevant keyword already present>", ...],
+  "missingKeywords": ["<important keyword typically expected for this role but absent>", ...],
+  "strengths": ["<specific genuine strength>", ...],
+  "criticalProblems": ["<specific significant weakness, e.g. generic summary, vague bullets>", ...],
+  "improvements": ["<specific actionable improvement>", ...]
+}
+
+Rules:
+- Infer the target role from the resume's own title/experience.
+- matchedKeywords / missingKeywords: up to 8 each.
+- strengths: 2-4 items, specific to this resume, not generic praise.
+- criticalProblems: 0-4 items, only include genuine problems.
+- improvements: 2-4 items, concrete and actionable.
+- Never invent facts, numbers, or skills not present in the resume text.
+- Keep every string under 20 words.
+- Output raw JSON only.`;
+
+    const user = `Resume:\n${data.resumeText.slice(0, 4000)}\n\nRemember: respond with ONLY the JSON object described in the system prompt.`;
+
+    const raw = await callAI(system, user, 1200);
+    return parseResumeSemanticResult(raw);
   });
 
 // ─── Public client API ───────────────────────────────────────────────────────
@@ -267,9 +315,86 @@ export async function generateProjectDescription(params: {
 
 /**
  * Stage 1 — general ATS-friendliness check, no job description required.
+ * @deprecated Use analyzeResumeHealth for the deterministic + AI breakdown.
+ * Kept as an alias so nothing calling the old single-score shape breaks.
  */
-export async function checkGeneralATSScore(params: { uid?: string; resumeText: string }): Promise<ATSResult> {
+export async function checkGeneralATSScore(params: {
+  uid?: string;
+  resumeText: string;
+}): Promise<ATSResult> {
   return checkGeneralATSScoreFn({ data: params });
+}
+
+// ─── Resume Health (deterministic + bounded AI) ─────────────────────────────
+
+export interface ResumeHealthResult {
+  /** 0-100. 80 points deterministic (never varies for the same resume),
+   *  20 points from bounded AI semantic scoring (keyword + content). */
+  score: number;
+  categories: CategoryScore[];
+  checks: AtsCheck[];
+  matchedKeywords: string[];
+  missingKeywords: string[];
+  strengths: string[];
+  criticalProblems: string[];
+  improvements: string[];
+  /** True if the AI portion failed and safe defaults were used — the
+   *  deterministic 80% of the score is still fully trustworthy either way. */
+  aiDegraded: boolean;
+}
+
+/**
+ * The combined resume health score used by the ATS Scanner. Runs the
+ * deterministic scorer locally (instant, reproducible) and layers a bounded
+ * AI contribution (keyword relevance + content quality, capped at 10 points
+ * each) on top. If the AI call fails, the deterministic 80/100 still comes
+ * back with a neutral AI slice rather than failing the whole analysis.
+ */
+export async function analyzeResumeHealth(params: {
+  uid?: string;
+  resumeData: ResumeData;
+}): Promise<ResumeHealthResult> {
+  const deterministic = scoreResumeDeterministic(params.resumeData);
+  const resumeText = resumeToText(params.resumeData);
+
+  let semantic;
+  let aiDegraded = false;
+  try {
+    semantic = await analyzeResumeSemanticFn({ data: { uid: params.uid, resumeText } });
+  } catch {
+    aiDegraded = true;
+    semantic = {
+      keywordScore: 5,
+      contentScore: 5,
+      matchedKeywords: [],
+      missingKeywords: [],
+      strengths: [],
+      criticalProblems: [],
+      improvements: [],
+    };
+  }
+
+  const categories: CategoryScore[] = [
+    ...deterministic.categories,
+    { id: "keywordRelevance", label: "Keyword Relevance", score: semantic.keywordScore, max: 10 },
+    { id: "contentQuality", label: "Content Quality", score: semantic.contentScore, max: 10 },
+  ];
+
+  const score = Math.round(
+    Math.min(100, deterministic.score + semantic.keywordScore + semantic.contentScore),
+  );
+
+  return {
+    score,
+    categories,
+    checks: deterministic.checks,
+    matchedKeywords: semantic.matchedKeywords,
+    missingKeywords: semantic.missingKeywords,
+    strengths: semantic.strengths,
+    criticalProblems: semantic.criticalProblems,
+    improvements: semantic.improvements,
+    aiDegraded,
+  };
 }
 
 /**

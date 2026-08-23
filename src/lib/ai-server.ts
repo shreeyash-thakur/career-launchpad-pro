@@ -36,7 +36,12 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function callOnce(model: string, systemPrompt: string, userMessage: string, maxTokens: number) {
+async function callOnce(
+  model: string,
+  systemPrompt: string,
+  userMessage: string,
+  maxTokens: number,
+) {
   return fetch(BASE_URL, {
     method: "POST",
     headers: {
@@ -79,7 +84,11 @@ export function checkRateLimit(key: string): void {
   requestLog.set(key, timestamps);
 }
 
-export async function callAI(systemPrompt: string, userMessage: string, maxTokens = 700): Promise<string> {
+export async function callAI(
+  systemPrompt: string,
+  userMessage: string,
+  maxTokens = 700,
+): Promise<string> {
   if (!OPENROUTER_API_KEY) {
     throw new Error(
       "OPENROUTER_API_KEY is not set on the server. Add it to your .env file (no VITE_ prefix).",
@@ -132,7 +141,9 @@ export async function callAI(systemPrompt: string, userMessage: string, maxToken
     }
   }
 
-  throw lastError ?? new Error("All AI providers are currently unavailable. Please try again shortly.");
+  throw (
+    lastError ?? new Error("All AI providers are currently unavailable. Please try again shortly.")
+  );
 }
 
 /**
@@ -141,7 +152,10 @@ export async function callAI(systemPrompt: string, userMessage: string, maxToken
  * {...} or [...] block instead of assuming the whole string is clean JSON.
  */
 export function extractJSON<T>(raw: string): T {
-  let cleaned = raw.trim().replace(/```(?:json)?/gi, "").trim();
+  const cleaned = raw
+    .trim()
+    .replace(/```(?:json)?/gi, "")
+    .trim();
 
   try {
     return JSON.parse(cleaned) as T;
@@ -197,6 +211,35 @@ export function parseATSResult(raw: string): ATSResult {
   // a safe, clearly-labelled empty result instead of throwing, so a single
   // malformed AI response doesn't take down the whole analysis screen.
   return atsResultSchema.parse({});
+}
+
+/**
+ * Schema for the *semantic-only* slice of resume health analysis — keyword
+ * strength and prose quality. Deliberately narrow: these two sub-scores are
+ * capped at 10 points each (20 of the overall 100) by the caller in
+ * ai-service.ts. The other 80 points come from the deterministic scorer in
+ * features/resume-builder/utils/ats-score.ts and never touch the AI at all.
+ * This keeps the AI's influence on the headline score bounded and the
+ * result mostly reproducible, while still using it for the things a
+ * rule-based checker genuinely can't judge — semantic keyword relevance and
+ * writing quality.
+ */
+export const resumeSemanticSchema = z.object({
+  keywordScore: z.number().min(0).max(10).catch(5),
+  contentScore: z.number().min(0).max(10).catch(5),
+  matchedKeywords: z.array(z.string()).catch([]),
+  missingKeywords: z.array(z.string()).catch([]),
+  strengths: z.array(z.string()).catch([]),
+  criticalProblems: z.array(z.string()).catch([]),
+  improvements: z.array(z.string()).catch([]),
+});
+export type ResumeSemanticResult = z.infer<typeof resumeSemanticSchema>;
+
+export function parseResumeSemanticResult(raw: string): ResumeSemanticResult {
+  const extracted = extractJSON<unknown>(raw);
+  const result = resumeSemanticSchema.safeParse(extracted);
+  if (result.success) return result.data;
+  return resumeSemanticSchema.parse({});
 }
 
 export function parseStringArray(raw: string, max: number): string[] {

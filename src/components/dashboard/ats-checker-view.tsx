@@ -16,11 +16,13 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { type FirestoreResume } from "@/lib/resume-service";
 import {
-  checkGeneralATSScore,
+  analyzeResumeHealth,
   checkJobMatchATSScore,
   resumeToText,
   type ATSResult,
+  type ResumeHealthResult,
 } from "@/lib/ai-service";
+import { ResumeHealthReportCard } from "@/components/dashboard/resume-health-report";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -38,16 +40,31 @@ function ScoreRing({ score }: { score: number }) {
   return (
     <div className="relative flex shrink-0 items-center justify-center">
       <svg width="132" height="132" className="-rotate-90">
-        <circle cx="66" cy="66" r={radius} fill="none" stroke="currentColor" strokeWidth="9" className="text-border" />
         <circle
-          cx="66" cy="66" r={radius}
-          fill="none" stroke={color} strokeWidth="9" strokeLinecap="round"
+          cx="66"
+          cy="66"
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="9"
+          className="text-border"
+        />
+        <circle
+          cx="66"
+          cy="66"
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth="9"
+          strokeLinecap="round"
           strokeDasharray={`${filled} ${circumference}`}
           style={{ transition: "stroke-dasharray 1s ease" }}
         />
       </svg>
       <div className="absolute text-center">
-        <div className="text-3xl font-bold tabular-nums" style={{ color }}>{score}</div>
+        <div className="text-3xl font-bold tabular-nums" style={{ color }}>
+          {score}
+        </div>
         <div className="text-[10px] text-muted-foreground font-medium">/ 100</div>
       </div>
     </div>
@@ -58,8 +75,8 @@ function verdictMeta(score: number) {
   return score >= 75
     ? { label: "Strong", color: "text-emerald-600", bg: "bg-emerald-500/10", Icon: CheckCircle2 }
     : score >= 50
-    ? { label: "Needs Work", color: "text-amber-600", bg: "bg-amber-500/10", Icon: AlertTriangle }
-    : { label: "Weak", color: "text-red-600", bg: "bg-red-500/10", Icon: XCircle };
+      ? { label: "Needs Work", color: "text-amber-600", bg: "bg-amber-500/10", Icon: AlertTriangle }
+      : { label: "Weak", color: "text-red-600", bg: "bg-red-500/10", Icon: XCircle };
 }
 
 function ResultCard({
@@ -87,14 +104,23 @@ function ResultCard({
         <div className="flex flex-col items-center gap-4 sm:flex-row sm:gap-6">
           <ScoreRing score={result.score} />
           <div className="text-center sm:text-left">
-            <span className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold mb-2", verdict.bg, verdict.color)}>
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold mb-2",
+                verdict.bg,
+                verdict.color,
+              )}
+            >
               <VerdictIcon className="size-3.5" />
               {verdict.label}
             </span>
             <p className="text-xs text-muted-foreground leading-relaxed">{result.verdict}</p>
             {selected && (
               <Button variant="outline" size="sm" className="mt-3 gap-1.5 text-xs" asChild>
-                <Link to="/builder" search={{ resumeId: selected.id, template: selected.templateId }}>
+                <Link
+                  to="/builder"
+                  search={{ resumeId: selected.id, template: selected.templateId }}
+                >
                   Go fix resume <ArrowRight className="size-3.5" />
                 </Link>
               </Button>
@@ -114,7 +140,10 @@ function ResultCard({
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {result.matchedKeywords.map((kw) => (
-                  <span key={kw} className="rounded-lg bg-emerald-500/15 border border-emerald-500/25 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+                  <span
+                    key={kw}
+                    className="rounded-lg bg-emerald-500/15 border border-emerald-500/25 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300"
+                  >
                     {kw}
                   </span>
                 ))}
@@ -129,7 +158,10 @@ function ResultCard({
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {result.missingKeywords.map((kw) => (
-                  <span key={kw} className="rounded-lg bg-red-500/15 border border-red-500/25 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300">
+                  <span
+                    key={kw}
+                    className="rounded-lg bg-red-500/15 border border-red-500/25 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300"
+                  >
                     {kw}
                   </span>
                 ))}
@@ -153,7 +185,8 @@ function ResultCard({
                 </span>
                 <p className="text-xs text-muted-foreground mt-1.5 mb-1">{s.issue}</p>
                 <p className="text-xs font-medium text-foreground">
-                  <span className="text-primary mr-1">Fix:</span>{s.fix}
+                  <span className="text-primary mr-1">Fix:</span>
+                  {s.fix}
                 </p>
               </div>
             ))}
@@ -180,7 +213,7 @@ export function AtsCheckerView({ resumes, preselectId }: Props) {
 
   // Stage 1 — general, no-JD check. Runs automatically whenever the
   // selected resume changes, since it needs no input from the person.
-  const [generalResult, setGeneralResult] = useState<ATSResult | null>(null);
+  const [generalResult, setGeneralResult] = useState<ResumeHealthResult | null>(null);
   const [generalLoading, setGeneralLoading] = useState(false);
   const [generalError, setGeneralError] = useState(false);
 
@@ -204,8 +237,7 @@ export function AtsCheckerView({ resumes, preselectId }: Props) {
     // A resume change invalidates any job-specific match from before.
     setMatchResult(null);
     try {
-      const resumeText = resumeToText(selected.resumeData);
-      const result = await checkGeneralATSScore({ resumeText });
+      const result = await analyzeResumeHealth({ resumeData: selected.resumeData });
       setGeneralResult(result);
     } catch (err) {
       setGeneralError(true);
@@ -257,7 +289,10 @@ export function AtsCheckerView({ resumes, preselectId }: Props) {
           <p className="mt-1 text-xs text-muted-foreground max-w-sm">
             You need at least one resume before you can check its ATS score.
           </p>
-          <Button asChild className="mt-4 bg-[image:var(--gradient-emerald)] text-primary-foreground font-semibold shadow-[var(--shadow-glow)] gap-2 text-xs">
+          <Button
+            asChild
+            className="mt-4 bg-[image:var(--gradient-emerald)] text-primary-foreground font-semibold shadow-[var(--shadow-glow)] gap-2 text-xs"
+          >
             <Link to="/onboarding">
               <Sparkles className="size-4" />
               Create a Resume
@@ -282,7 +317,9 @@ export function AtsCheckerView({ resumes, preselectId }: Props) {
             className="h-9 w-full rounded-xl border border-input bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
           >
             {resumes.map((r) => (
-              <option key={r.id} value={r.id}>{r.title || "Untitled Resume"}</option>
+              <option key={r.id} value={r.id}>
+                {r.title || "Untitled Resume"}
+              </option>
             ))}
           </select>
         </div>
@@ -301,7 +338,9 @@ export function AtsCheckerView({ resumes, preselectId }: Props) {
 
       {generalError && !generalLoading && (
         <div className="rounded-3xl border border-dashed border-border bg-card/30 p-8 text-center">
-          <p className="text-xs text-muted-foreground mb-3">Something went wrong running the check.</p>
+          <p className="text-xs text-muted-foreground mb-3">
+            Something went wrong running the check.
+          </p>
           <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={runGeneralCheck}>
             Try again
           </Button>
@@ -309,9 +348,8 @@ export function AtsCheckerView({ resumes, preselectId }: Props) {
       )}
 
       {generalResult && !generalLoading && (
-        <ResultCard
+        <ResumeHealthReportCard
           result={generalResult}
-          title="General ATS Score"
           selected={selected}
           onReanalyse={runGeneralCheck}
           reanalysing={generalLoading}
@@ -337,7 +375,12 @@ export function AtsCheckerView({ resumes, preselectId }: Props) {
                 </p>
               </div>
             </div>
-            <ChevronDown className={cn("size-4 text-muted-foreground transition-transform shrink-0", jdOpen && "rotate-180")} />
+            <ChevronDown
+              className={cn(
+                "size-4 text-muted-foreground transition-transform shrink-0",
+                jdOpen && "rotate-180",
+              )}
+            />
           </button>
 
           {jdOpen && (
@@ -387,9 +430,18 @@ export function AtsCheckerView({ resumes, preselectId }: Props) {
             How ATS works
           </h3>
           <ul className="space-y-2 text-xs text-muted-foreground">
-            <li className="flex gap-2"><span className="text-primary">•</span> ATS software scans resumes for structure and keywords before a human ever sees them.</li>
-            <li className="flex gap-2"><span className="text-primary">•</span> Resumes scoring below 50 are often filtered out automatically.</li>
-            <li className="flex gap-2"><span className="text-primary">•</span> A general check catches structural issues; a job-specific check catches keyword gaps for one role.</li>
+            <li className="flex gap-2">
+              <span className="text-primary">•</span> ATS software scans resumes for structure and
+              keywords before a human ever sees them.
+            </li>
+            <li className="flex gap-2">
+              <span className="text-primary">•</span> Resumes scoring below 50 are often filtered
+              out automatically.
+            </li>
+            <li className="flex gap-2">
+              <span className="text-primary">•</span> A general check catches structural issues; a
+              job-specific check catches keyword gaps for one role.
+            </li>
           </ul>
         </div>
       )}
@@ -406,7 +458,8 @@ function Header() {
       </div>
       <h1 className="font-display text-2xl font-bold tracking-tight">ATS Score Checker</h1>
       <p className="text-xs text-muted-foreground">
-        First, see how ATS-friendly your resume is on its own. Then, optionally, check it against a specific job.
+        First, see how ATS-friendly your resume is on its own. Then, optionally, check it against a
+        specific job.
       </p>
     </div>
   );
