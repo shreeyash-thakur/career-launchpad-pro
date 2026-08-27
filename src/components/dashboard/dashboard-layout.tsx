@@ -15,6 +15,8 @@ import {
   X,
   Target,
   Loader2,
+  BrainCircuit,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/auth-context";
@@ -24,11 +26,20 @@ import { MyResumesView } from "./my-resumes-view";
 import { TemplatesView } from "./templates-view";
 import { AiToolsView } from "./ai-tools-view";
 import { AtsCheckerView } from "./ats-checker-view";
+import { InterviewPrepView } from "./interview-prep-view";
 import { ProfileView } from "./profile-view";
 import { SettingsView } from "./settings-view";
 import { cn } from "@/lib/utils";
 
-type TabKey = "overview" | "resumes" | "templates" | "ats" | "ai-tools" | "profile" | "settings";
+type TabKey =
+  | "overview"
+  | "resumes"
+  | "ats"
+  | "interview"
+  | "templates"
+  | "ai-tools"
+  | "profile"
+  | "settings";
 
 interface Props {
   initialTab?: string;
@@ -100,9 +111,10 @@ export function DashboardLayout({ initialTab }: Props) {
       icon: FileText,
       badge: resumes.length > 0 ? resumes.length : undefined,
     },
-    { key: "ats" as const, label: "ATS Job Matcher", icon: Target },
+    { key: "ats" as const, label: "ATS Resume Checker", icon: Target },
+    { key: "interview" as const, label: "Interview Prep", icon: Bot },
     { key: "templates" as const, label: "Templates", icon: Layout },
-    { key: "ai-tools" as const, label: "AI Career Tools", icon: Bot },
+    { key: "ai-tools" as const, label: "AI Career Tools", icon: Sparkles },
   ];
 
   const secondaryNavItems = [
@@ -358,9 +370,18 @@ export function DashboardLayout({ initialTab }: Props) {
             <AtsCheckerView resumes={resumes} />
           )}
 
+          {activeTab === "interview" && (
+            <InterviewPrepView resumes={resumes} />
+          )}
+
           {activeTab === "templates" && <TemplatesView onRefreshResumes={fetchResumes} />}
 
-          {activeTab === "ai-tools" && <AiToolsView resumes={resumes} />}
+          {activeTab === "ai-tools" && (
+            <AiToolsView
+              resumes={resumes}
+              onNavigateToInterview={() => setActiveTab("interview")}
+            />
+          )}
 
           {activeTab === "profile" && <ProfileView />}
 

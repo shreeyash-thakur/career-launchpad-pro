@@ -13,6 +13,7 @@ import {
   Globe,
   Award,
   ArrowRight,
+  HelpCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,15 +23,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type FirestoreResume } from "@/lib/resume-service";
 import { CoverLetterView } from "./cover-letter-view";
 import { LinkedinOptimizerView } from "./linkedin-optimizer-view";
-import { InterviewPrepView } from "./interview-prep-view";
 import { CareerReadinessView } from "./career-readiness-view";
-import { AtsCheckerView } from "./ats-checker-view";
 
 interface Props {
   resumes?: FirestoreResume[];
+  onNavigateToInterview?: () => void;
 }
 
-export function AiToolsView({ resumes = [] }: Props) {
+export function AiToolsView({ resumes = [], onNavigateToInterview }: Props) {
   const [activeTab, setActiveTab] = useState("cover-letter");
 
   // Tool 1: Bullet Point Enhancer State
@@ -95,30 +95,53 @@ export function AiToolsView({ resumes = [] }: Props) {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {/* Top Banner linking to dedicated Interview Prep */}
+      {onNavigateToInterview && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
+              <Bot className="size-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-foreground">
+                Looking for the AI Mock Interview Coach?
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Practice 15 categorized questions across 4 difficulty levels (Beginner, Intermediate, Hard & Bonus).
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            onClick={onNavigateToInterview}
+            className="shrink-0 text-xs font-semibold gap-1.5 h-8 bg-primary text-primary-foreground"
+          >
+            Open Interview Prep <ArrowRight className="size-3" />
+          </Button>
+        </div>
+      )}
+
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 text-primary font-semibold text-xs mb-1.5">
           <Sparkles className="size-4" />
-          <span>Full AI Career Acceleration Suite</span>
+          <span>Application Writing & Personal Brand Suite</span>
         </div>
         <h1 className="font-display text-2xl font-bold tracking-tight">AI Career Tools</h1>
         <p className="text-xs text-muted-foreground">
-          Everything you need to land top interviews: JD Matcher, Cover Letter Generator, LinkedIn Optimizer, Mock Interview Coach, and Career Readiness score.
+          Accelerate your job applications with automated Cover Letters, LinkedIn Profile optimization, Bullet Point enhancers, and Career Readiness analysis.
         </p>
       </div>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 h-auto p-1 bg-card border border-border rounded-2xl gap-1">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 h-auto p-1 bg-card border border-border rounded-2xl gap-1">
           <TabsTrigger value="cover-letter" className="text-xs py-2.5 rounded-xl gap-1.5 font-semibold">
             <FileText className="size-3.5" /> Cover Letter
           </TabsTrigger>
           <TabsTrigger value="linkedin" className="text-xs py-2.5 rounded-xl gap-1.5 font-semibold">
             <Globe className="size-3.5" /> LinkedIn
-          </TabsTrigger>
-          <TabsTrigger value="interview" className="text-xs py-2.5 rounded-xl gap-1.5 font-semibold">
-            <Bot className="size-3.5" /> Interview Prep
           </TabsTrigger>
           <TabsTrigger value="readiness" className="text-xs py-2.5 rounded-xl gap-1.5 font-semibold">
             <Award className="size-3.5" /> Readiness
@@ -139,11 +162,6 @@ export function AiToolsView({ resumes = [] }: Props) {
         {/* Tab: LinkedIn Optimizer */}
         <TabsContent value="linkedin" className="mt-6">
           <LinkedinOptimizerView resumes={resumes} />
-        </TabsContent>
-
-        {/* Tab: Interview Prep */}
-        <TabsContent value="interview" className="mt-6">
-          <InterviewPrepView resumes={resumes} />
         </TabsContent>
 
         {/* Tab: Career Readiness */}

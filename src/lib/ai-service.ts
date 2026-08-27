@@ -984,6 +984,124 @@ ${params.existingSkills?.length ? `Already has: ${params.existingSkills.join(", 
 function simulateFallbackAI(system: string, user: string): string {
   const sysLower = system.toLowerCase();
 
+    if (sysLower.includes("ats") || sysLower.includes("audit") || sysLower.includes("applicant tracking")) {
+    return JSON.stringify({
+      overallScore: 78,
+      grade: "B",
+      verdict: "Good structural foundation with targeted improvements needed for executive ATS passing rate.",
+      summaryFeedback: "Your resume has clear technical proficiencies and work history, but needs higher quantification density in experience bullets and stronger opening summary positioning.",
+      sections: [
+        {
+          name: "Contact Information",
+          score: 100,
+          status: "excellent",
+          issueCount: 0,
+          summary: "Header contains complete name, email, phone, location, and customized LinkedIn profile URL.",
+          issues: [],
+          fixes: ["Maintain direct contact information updated at the top of your resume."]
+        },
+        {
+          name: "Professional Summary",
+          score: 80,
+          status: "good",
+          issueCount: 1,
+          summary: "Summary provides a solid introduction to technical experience.",
+          issues: ["Summary could include 2-3 additional high-value keywords relevant to senior positions."],
+          fixes: ["Incorporate target title keywords and your primary metric milestone in the opening sentence."]
+        },
+        {
+          name: "Work Experience",
+          score: 72,
+          status: "needs-work",
+          issueCount: 2,
+          summary: "Experience bullets demonstrate responsibilities but lack consistent metrics.",
+          issues: ["Only 40% of bullet points contain quantifiable numbers, %, or dollar figures.", "Several bullets use passive phrasing."],
+          fixes: ["Start each bullet with an active past-tense verb (Spearheaded, Architected, Engineered).", "Add percentage improvements, scale metrics, or cost/time savings to every role."]
+        },
+        {
+          name: "Skills & Technologies",
+          score: 90,
+          status: "excellent",
+          issueCount: 0,
+          summary: "Technical skills are categorized and include high-demand modern technologies.",
+          issues: [],
+          fixes: ["Keep skill groupings organized into Languages, Frameworks, and Tools."]
+        },
+        {
+          name: "Education & Credentials",
+          score: 88,
+          status: "excellent",
+          issueCount: 0,
+          summary: "Degree, field of study, and institution details are clearly formatted.",
+          issues: [],
+          fixes: []
+        }
+      ],
+      recommendations: [
+        {
+          id: "rec-1",
+          category: "Critical",
+          section: "Work Experience",
+          title: "Quantify Experience Bullets with Impact Numbers",
+          issue: "Experience bullets describe tasks rather than measurable business outcomes.",
+          suggestion: "Rewrite bullet points using the XYZ formula: Accomplished [X] as measured by [Y], by doing [Z].",
+          exampleFix: "Before: Responsible for maintaining web applications and fixing bugs.\nAfter: Engineered high-performance frontend components, reducing average page load latency by 35% and improving uptime to 99.9%.",
+          impactScore: 12
+        },
+        {
+          id: "rec-2",
+          category: "High Impact",
+          section: "Professional Summary",
+          title: "Enhance Opening Summary with Role Keywords",
+          issue: "Summary does not explicitly target core architectural domain keywords.",
+          suggestion: "Include your target job title, total years of experience, and your top 3 technical specialties.",
+          exampleFix: "Results-driven Senior Software Engineer with 5+ years of experience architecting distributed cloud systems and scalable React/Node.js applications. Proven track record of boosting team velocity by 30% and delivering mission-critical platforms on time.",
+          impactScore: 10
+        },
+        {
+          id: "rec-3",
+          category: "Quick Fix",
+          section: "Skills & Technologies",
+          title: "Add Cloud Deployment & Testing Frameworks",
+          issue: "Cloud deployment tools (AWS, Docker, CI/CD) and automated testing frameworks are underrepresented.",
+          suggestion: "List specific DevOps and testing tools you have used to pass automated tech screen filters.",
+          exampleFix: "Tools: Docker, AWS (S3, Lambda), GitHub Actions, Jest, Cypress, PostgreSQL, Redis",
+          impactScore: 7
+        }
+      ],
+      strengths: [
+        "Clean, standard single-column ATS-friendly hierarchy",
+        "Contact information and LinkedIn profile are complete",
+        "Demonstrates clear progressive career responsibilities"
+      ],
+      criticalIssues: [
+        "Less than 50% of experience bullets have quantifiable impact metrics"
+      ],
+      quickWins: [
+        {
+          action: "Add latency, revenue, or team size metrics to your top 3 bullet points",
+          impact: "high",
+          effort: "quick",
+          fixCode: "Boosted system throughput by 40% across 50k+ daily active users"
+        },
+        {
+          action: "Include 3 key tools in your professional summary",
+          impact: "medium",
+          effort: "quick",
+          fixCode: "Specializing in React, TypeScript, and microservices architecture"
+        }
+      ],
+      metrics: {
+        quantifiedBulletsPercent: 42,
+        actionVerbStrength: "Moderate",
+        contactCompleteness: 100,
+        skillsCount: 14,
+        detectedSectionsCount: 5,
+        wordCount: 420
+      }
+    });
+  }
+
   if (sysLower.includes("cover letter")) {
     return "Dear Hiring Team,\n\nI am writing to express my strong interest in this position. With a solid foundation in modern engineering and a track record of delivering resilient, high-performance applications, I am eager to contribute directly to your team's ongoing initiatives.\n\nThroughout my career, I have prioritized clean architecture, quantifiable results, and close cross-functional collaboration. My background aligns directly with the core requirements of your opening.\n\nThank you for your consideration, and I look forward to speaking with you soon.\n\nSincerely,\nCandidate";
   }
@@ -1512,5 +1630,484 @@ function buildFallbackATSAudit(resumeData: ResumeData): ResumeOnlyATSResult {
       { action: "Replace weak verbs (helped, assisted, worked on) with strong action verbs", impact: "medium", effort: "quick" },
       { action: "Add 5-10 more specific technical skills matching your target job descriptions", impact: "high", effort: "medium" },
     ],
+  };
+}
+
+// ─── Comprehensive ATS Audit & Suggestions Engine ───────────────────────────
+
+export interface ATSRecommendation {
+  id: string;
+  category: "Critical" | "High Impact" | "Quick Fix" | "Optimization";
+  section: string; // e.g. "Work Experience", "Professional Summary", "Skills", "Contact Information", "Formatting"
+  title: string;
+  issue: string; // Exactly what is wrong / missing
+  suggestion: string; // Actionable guidance on how to fix
+  exampleFix?: string; // Real, concrete rewrite example
+  impactScore: number; // Estimated ATS point gain e.g. +8
+}
+
+export interface SectionAudit {
+  name: string;
+  score: number; // 0-100
+  status: "excellent" | "good" | "needs-work" | "missing";
+  issueCount: number;
+  summary: string;
+  issues: string[];
+  fixes: string[];
+  suggestedAdditions?: string[];
+}
+
+export interface ComprehensiveATSAuditResult {
+  overallScore: number;
+  grade: "A+" | "A" | "B" | "C" | "D" | "F";
+  verdict: string;
+  summaryFeedback: string;
+  sections: SectionAudit[];
+  recommendations: ATSRecommendation[];
+  strengths: string[];
+  criticalIssues: string[];
+  quickWins: {
+    action: string;
+    impact: "high" | "medium" | "low";
+    effort: "quick" | "medium" | "involved";
+    fixCode?: string;
+  }[];
+  metrics: {
+    quantifiedBulletsPercent: number;
+    actionVerbStrength: "Strong" | "Moderate" | "Needs Improvement";
+    contactCompleteness: number; // percentage 0-100
+    skillsCount: number;
+    detectedSectionsCount: number;
+    wordCount: number;
+  };
+  jdMatch?: {
+    matchScore: number;
+    verdict: string;
+    matchedKeywords: string[];
+    missingKeywords: string[];
+    bucketScores: BucketScores;
+  };
+}
+
+export async function analyzeComprehensiveATS(params: {
+  resumeData?: ResumeData;
+  resumeText?: string;
+  jobDescription?: string;
+}): Promise<ComprehensiveATSAuditResult> {
+  const { resumeData, jobDescription = "" } = params;
+  const rawText = resumeData ? resumeToText(resumeData) : (params.resumeText || "");
+  const hasJD = jobDescription.trim().length > 25;
+
+  const system = `You are an elite ATS (Applicant Tracking System) Architect, Senior Technical Recruiter, and Career Strategist.
+Analyze the candidate's resume for ATS compliance, recruiter scanability, keyword power, and quantifiable impact.
+${hasJD ? "A target Job Description is provided. Cross-reference requirements and keyword alignment." : "No Job Description provided. Perform a comprehensive general ATS and industry-standard resume quality audit."}
+
+You MUST return ONLY a single valid JSON object matching this structure:
+{
+  "overallScore": <number 0-100>,
+  "grade": "<A+|A|B|C|D|F>",
+  "verdict": "<1-2 sentence overall evaluation>",
+  "summaryFeedback": "<3-4 sentence detailed recruiter assessment of the candidate's positioning>",
+  "sections": [
+    {
+      "name": "<Contact Information|Professional Summary|Work Experience|Skills & Technologies|Education|Projects & Portfolios|Formatting & Layout>",
+      "score": <0-100>,
+      "status": "<excellent|good|needs-work|missing>",
+      "issueCount": <number>,
+      "summary": "<section evaluation>",
+      "issues": ["<specific issue 1>", "<specific issue 2>"],
+      "fixes": ["<clear step-by-step fix 1>", "<fix 2>"],
+      "suggestedAdditions": ["<concrete suggested item to add>"]
+    }
+  ],
+  "recommendations": [
+    {
+      "id": "rec-1",
+      "category": "<Critical|High Impact|Quick Fix|Optimization>",
+      "section": "<Section Name>",
+      "title": "<Short recommendation title>",
+      "issue": "<Exact problem in the resume>",
+      "suggestion": "<Specific guidance on how to fix it>",
+      "exampleFix": "<Realistic rewritten text or bullet point example>",
+      "impactScore": <number e.g. 5 to 15>
+    }
+  ],
+  "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
+  "criticalIssues": ["<critical issue that causes ATS rejection>"],
+  "quickWins": [
+    {
+      "action": "<High leverage 2-minute fix>",
+      "impact": "<high|medium|low>",
+      "effort": "<quick|medium|involved>",
+      "fixCode": "<suggested replacement snippet>"
+    }
+  ],
+  "metrics": {
+    "quantifiedBulletsPercent": <number 0-100>,
+    "actionVerbStrength": "<Strong|Moderate|Needs Improvement>",
+    "contactCompleteness": <number 0-100>,
+    "skillsCount": <number>,
+    "detectedSectionsCount": <number>,
+    "wordCount": <number>
+  }${hasJD ? `,
+  "jdMatch": {
+    "matchScore": <number 0-100>,
+    "verdict": "<match summary>",
+    "matchedKeywords": ["<matched skill 1>", "<matched skill 2>"],
+    "missingKeywords": ["<missing skill 1>", "<missing skill 2>"],
+    "bucketScores": {
+      "keywords": <0-100>,
+      "completeness": <0-100>,
+      "quantification": <0-100>,
+      "seniority": <0-100>,
+      "formatting": <0-100>
+    }
+  }` : ""}
+}
+
+Rules:
+- Provide AT LEAST 4 to 6 specific recommendations with realistic example fixes.
+- Every recommendation MUST have an "exampleFix" demonstrating exactly what good copy looks like.
+- Highlight missing quantifiable metrics, weak passive verbs (e.g. "assisted", "responsible for"), and missing role keywords.
+- Return ONLY valid JSON. No markdown ticks, no commentary.`;
+
+  const user = `Candidate Resume Content:
+${rawText.slice(0, 4000)}
+
+${hasJD ? `Target Job Description:\n${jobDescription.slice(0, 2500)}` : "Target Role Context: General Industry Standard"}`;
+
+  try {
+    const raw = await callAI(system, user, 3500);
+    const parsed = extractJSON<Partial<ComprehensiveATSAuditResult>>(raw);
+    
+    if (parsed && typeof parsed.overallScore === "number" && Array.isArray(parsed.recommendations)) {
+      return {
+        overallScore: Math.max(0, Math.min(100, Math.round(parsed.overallScore))),
+        grade: (parsed.grade as any) || (parsed.overallScore >= 90 ? "A+" : parsed.overallScore >= 80 ? "A" : parsed.overallScore >= 65 ? "B" : parsed.overallScore >= 50 ? "C" : "D"),
+        verdict: parsed.verdict || "Resume evaluated against ATS parsing standards.",
+        summaryFeedback: parsed.summaryFeedback || "Your resume has a strong foundation with targeted opportunities to improve keyword visibility and quantifiable impact metrics.",
+        sections: Array.isArray(parsed.sections) ? parsed.sections : [],
+        recommendations: parsed.recommendations.map((r, i) => ({
+          id: r.id || `rec-${i + 1}`,
+          category: r.category || (i === 0 ? "Critical" : i < 3 ? "High Impact" : "Quick Fix"),
+          section: r.section || "General",
+          title: r.title || `Improve ${r.section || "Resume"}`,
+          issue: r.issue || "Section requires optimization for ATS keyword filters.",
+          suggestion: r.suggestion || "Update phrasing with strong action verbs and measurable metrics.",
+          exampleFix: r.exampleFix || "Led cross-functional initiatives improving delivery speed by 25%.",
+          impactScore: typeof r.impactScore === "number" ? r.impactScore : 8,
+        })),
+        strengths: Array.isArray(parsed.strengths) ? parsed.strengths : ["Clear structural organization", "Core technical proficiencies listed"],
+        criticalIssues: Array.isArray(parsed.criticalIssues) ? parsed.criticalIssues : [],
+        quickWins: Array.isArray(parsed.quickWins) ? parsed.quickWins : [],
+        metrics: parsed.metrics || {
+          quantifiedBulletsPercent: 45,
+          actionVerbStrength: "Moderate",
+          contactCompleteness: 80,
+          skillsCount: 12,
+          detectedSectionsCount: 5,
+          wordCount: rawText.split(/\s+/).length,
+        },
+        jdMatch: hasJD && parsed.jdMatch ? parsed.jdMatch : undefined,
+      };
+    }
+  } catch (err) {
+    // Fall back to intelligent deterministic audit
+  }
+
+  return buildIntelligentDeterministicAudit(resumeData, rawText, jobDescription);
+}
+
+function buildIntelligentDeterministicAudit(
+  resumeData?: ResumeData,
+  rawText = "",
+  jdText = ""
+): ComprehensiveATSAuditResult {
+  const p = resumeData?.personal || {
+    fullName: "Candidate",
+    email: rawText.includes("@") ? "email@domain.com" : "",
+    phone: /\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/.test(rawText) ? "123-456-7890" : "",
+    location: "",
+    linkedin: rawText.toLowerCase().includes("linkedin.com") ? "linkedin.com/in/profile" : "",
+    github: rawText.toLowerCase().includes("github.com") ? "github.com/profile" : "",
+    website: "",
+    title: "Software Engineer",
+  };
+
+  const hasPhone = !!p.phone;
+  const hasLinkedIn = !!p.linkedin || rawText.toLowerCase().includes("linkedin");
+  const hasLocation = !!p.location || /([A-Z][a-z]+,\s*[A-Z]{2})|Remote|India|USA|UK/i.test(rawText);
+  const hasEmail = !!p.email || rawText.includes("@");
+
+  const summary = resumeData?.summary || "";
+  const hasSummary = summary.trim().length > 30 || rawText.toLowerCase().includes("summary") || rawText.toLowerCase().includes("profile");
+
+  const allBullets = resumeData?.experience?.flatMap((e) => e.bullets || []).filter(Boolean) || 
+    rawText.split("\n").filter((l) => /^[-•*]/.test(l.trim()));
+  
+  const metricRegex = /\b\d+(\.\d+)?%?|\$|[\d,]+(\+)?\s*(users|clients|revenue|latency|hours|days|teams|projects|x|times|k|m|million|billion)\b/i;
+  const quantifiedBullets = allBullets.filter((b) => metricRegex.test(b));
+  const quantRatio = allBullets.length > 0 ? Math.round((quantifiedBullets.length / allBullets.length) * 100) : 35;
+
+  const weakVerbs = ["helped", "assisted", "worked on", "responsible for", "participated in", "did", "handled"];
+  const bulletsWithWeakVerbs = allBullets.filter((b) => weakVerbs.some((wv) => b.toLowerCase().includes(wv)));
+
+  const skillsList = resumeData?.skills?.flatMap((s) => s.items) || [];
+  const skillsCount = skillsList.length > 0 ? skillsList.length : (rawText.match(/react|typescript|javascript|python|java|node|sql|aws|docker|git|html|css/gi)?.length || 8);
+
+  const educationCount = resumeData?.education?.length || (rawText.toLowerCase().includes("bachelor") || rawText.toLowerCase().includes("university") ? 1 : 0);
+
+  // Score calculation
+  let score = 48;
+  if (hasEmail) score += 6;
+  if (hasPhone) score += 6;
+  if (hasLinkedIn) score += 8;
+  if (hasLocation) score += 4;
+  if (hasSummary) score += 10;
+  if (allBullets.length >= 4) score += 10;
+  if (quantRatio >= 50) score += 12;
+  else if (quantRatio >= 25) score += 6;
+  if (skillsCount >= 8) score += 8;
+  if (educationCount > 0) score += 6;
+
+  score = Math.min(94, Math.max(38, score));
+  const grade: "A+" | "A" | "B" | "C" | "D" | "F" = 
+    score >= 90 ? "A+" : score >= 80 ? "A" : score >= 68 ? "B" : score >= 52 ? "C" : score >= 40 ? "D" : "F";
+
+  const recommendations: ATSRecommendation[] = [];
+
+  // Rec 1: Quantification
+  if (quantRatio < 60) {
+    recommendations.push({
+      id: "rec-metrics",
+      category: "Critical",
+      section: "Work Experience",
+      title: "Quantify Experience Bullets with Measurable Metrics",
+      issue: `Only ${quantRatio}% of your experience bullets contain quantifiable numbers, percentages, or measurable outcomes. ATS algorithms and hiring managers favor candidates who demonstrate business impact.`,
+      suggestion: "Rewrite experience bullets using the Google XYZ formula: 'Accomplished [X] as measured by [Y], by doing [Z]'. Add specific performance percentages, team sizes, user counts, or latency reductions.",
+      exampleFix: "Before: 'Worked on the frontend search feature and improved performance.'\nAfter: 'Architected and optimized customer search indexing, reducing client-side query latency by 42% and increasing daily active user engagement by 18%.'",
+      impactScore: 12,
+    });
+  }
+
+  // Rec 2: Weak Verbs
+  if (bulletsWithWeakVerbs.length > 0 || allBullets.length > 0) {
+    recommendations.push({
+      id: "rec-verbs",
+      category: "High Impact",
+      section: "Work Experience",
+      title: "Replace Passive Phrasing with High-Impact Power Action Verbs",
+      issue: "Several bullet points use passive phrases ('assisted with', 'responsible for') rather than proactive leadership verbs, diminishing your perceived ownership.",
+      suggestion: "Start every single bullet point with past-tense action verbs like 'Spearheaded', 'Architected', 'Engineered', 'Overhauled', 'Automated', or 'Championed'.",
+      exampleFix: "Before: 'Responsible for creating REST APIs for user auth.'\nAfter: 'Designed and deployed OAuth2 authentication microservices, supporting 50,000+ monthly active users with 99.98% uptime.'",
+      impactScore: 9,
+    });
+  }
+
+  // Rec 3: Summary
+  if (!hasSummary || summary.length < 60) {
+    recommendations.push({
+      id: "rec-summary",
+      category: "High Impact",
+      section: "Professional Summary",
+      title: "Add a Keyword-Rich 3-Sentence Executive Summary",
+      issue: "Your resume lacks a targeted professional summary at the top. This section is prime real estate for keyword matching in ATS search crawlers.",
+      suggestion: "Add a 3-sentence summary highlighting: (1) Your role title and years of experience, (2) Core technical specializations, and (3) Your unique value proposition.",
+      exampleFix: "Results-driven Software Engineer with 4+ years of experience architecting high-performance web applications and distributed cloud systems. Proven track record in React, TypeScript, and microservices architecture, reducing system downtime by 35%. Passionate about driving engineering excellence and scalable product delivery.",
+      impactScore: 10,
+    });
+  }
+
+  // Rec 4: Contact & Social
+  if (!hasLinkedIn || !hasPhone) {
+    recommendations.push({
+      id: "rec-contact",
+      category: "Quick Fix",
+      section: "Contact Information",
+      title: "Complete All Contact & Professional Social Links",
+      issue: `Missing ${[!hasPhone ? "phone number" : "", !hasLinkedIn ? "custom LinkedIn profile URL" : ""].filter(Boolean).join(" and ")}. Recruiter parsing software flags incomplete candidate profiles.`,
+      suggestion: "Ensure your full name, phone number with country code, professional email, city/state, and clean LinkedIn URL (e.g. linkedin.com/in/yourname) are in the header.",
+      exampleFix: "John Doe | Senior Engineer | +1 (555) 019-2834 | john@example.com | San Francisco, CA | linkedin.com/in/johndoe | github.com/johndoe",
+      impactScore: 7,
+    });
+  }
+
+  // Rec 5: Skills Categorization
+  recommendations.push({
+    id: "rec-skills",
+    category: "Optimization",
+    section: "Skills & Technologies",
+    title: "Structure Skills into Categorized ATS-Parseable Groups",
+    issue: "Flat or uncategorized skill lists can be missed by older ATS parsers that look for contextual grouping.",
+    suggestion: "Group your skills into clear headings: Languages, Frameworks & Libraries, Cloud & Infrastructure, Databases, and Tools & Workflows.",
+    exampleFix: "Languages: TypeScript, JavaScript (ES6+), Python, SQL\nFrameworks: React 19, Next.js, Node.js, Express, Tailwind CSS\nCloud & DevOps: AWS (S3, Lambda), Docker, GitHub Actions, CI/CD Pipelines\nDatabases: PostgreSQL, MongoDB, Redis",
+    impactScore: 6,
+  });
+
+  const sections: SectionAudit[] = [
+    {
+      name: "Contact Information",
+      score: [hasEmail, hasPhone, hasLinkedIn, hasLocation].filter(Boolean).length * 25,
+      status: hasEmail && hasPhone && hasLinkedIn ? "excellent" : hasEmail && hasPhone ? "good" : "needs-work",
+      issueCount: [!hasEmail, !hasPhone, !hasLinkedIn, !hasLocation].filter(Boolean).length,
+      summary: hasEmail && hasPhone && hasLinkedIn ? "Complete contact header with all required recruiter contact channels." : "Contact information is missing key communication channels required by ATS parsers.",
+      issues: [
+        !hasPhone ? "Phone number is missing or not formatted with country code" : "",
+        !hasLinkedIn ? "LinkedIn profile URL is absent from header" : "",
+        !hasLocation ? "Location (City, Country/State) is not explicitly listed" : "",
+      ].filter(Boolean),
+      fixes: [
+        "Include a valid direct phone number for recruiter screening calls",
+        "Add a personalized LinkedIn URL (e.g. linkedin.com/in/username)",
+        "Specify your primary work location or 'Remote / Open to Relocation'",
+      ],
+      suggestedAdditions: ["LinkedIn profile", "GitHub portfolio URL", "Clean phone number"],
+    },
+    {
+      name: "Professional Summary",
+      score: hasSummary ? 82 : 25,
+      status: hasSummary ? "good" : "missing",
+      issueCount: hasSummary ? 1 : 2,
+      summary: hasSummary ? "Summary is present and sets up candidate positioning." : "No professional summary detected. ATS keyword crawlers place heavy weight on the top 100 words.",
+      issues: !hasSummary 
+        ? ["Missing executive summary at top of resume", "ATS keyword indexing reduced without opening profile overview"]
+        : ["Ensure summary explicitly contains target job title keywords and years of experience"],
+      fixes: [
+        "Craft a 3-sentence summary incorporating your target job title",
+        "Mention 3 to 4 core technologies directly in the summary",
+        "Highlight your largest career metric or milestone",
+      ],
+      suggestedAdditions: ["Target role title", "Years of experience", "Core architectural specialties"],
+    },
+    {
+      name: "Work Experience",
+      score: quantRatio >= 50 ? 88 : quantRatio >= 25 ? 65 : 42,
+      status: quantRatio >= 50 ? "good" : "needs-work",
+      issueCount: quantRatio < 50 ? 2 : 1,
+      summary: `${quantRatio}% of experience bullets contain quantified metrics. Action verbs are present across recent roles.`,
+      issues: [
+        quantRatio < 50 ? `Only ${quantRatio}% of bullets have measurable metrics (aim for >60%)` : "",
+        bulletsWithWeakVerbs.length > 0 ? "Some bullets use passive phrasing ('assisted', 'worked on') instead of leadership verbs" : "",
+      ].filter(Boolean),
+      fixes: [
+        "Start every bullet point with a distinct strong action verb in past tense",
+        "Add numbers: percentage gains, latency cuts, revenue, or team size",
+        "Keep each bullet to 1-2 lines for optimal ATS line-wrapping and recruiter scanning",
+      ],
+      suggestedAdditions: ["Latency reduction %", "User scale numbers", "Cost/time savings metrics"],
+    },
+    {
+      name: "Skills & Technologies",
+      score: skillsCount >= 10 ? 90 : 55,
+      status: skillsCount >= 10 ? "excellent" : "needs-work",
+      issueCount: skillsCount < 10 ? 1 : 0,
+      summary: `Found ${skillsCount} technical and professional skills across the resume.`,
+      issues: skillsCount < 10 ? ["Skill count is relatively low for technical ATS screening thresholds"] : [],
+      fixes: [
+        "Group skills into distinct categories (Languages, Frameworks, Cloud, Tools)",
+        "Include both broad terms and specific version/library names",
+        "Cross-reference target job descriptions to include required matching keywords",
+      ],
+      suggestedAdditions: ["Cloud deployment tools", "Testing frameworks", "CI/CD & DevOps tools"],
+    },
+    {
+      name: "Education & Credentials",
+      score: educationCount > 0 ? 92 : 40,
+      status: educationCount > 0 ? "excellent" : "needs-work",
+      issueCount: educationCount > 0 ? 0 : 1,
+      summary: educationCount > 0 ? "Degree, institution, and field of study are clearly structured." : "Education information is sparse or unformatted.",
+      issues: educationCount === 0 ? ["Education section is missing or lacks institution/degree details"] : [],
+      fixes: [
+        "List your degree type, major/field, university name, and graduation year",
+        "Include relevant honors, GPA (if >3.5), or relevant coursework if an early-career candidate",
+      ],
+    },
+  ];
+
+  const quickWins = [
+    {
+      action: "Add 2 quantifiable metrics (% or $) to your most recent job experience bullets",
+      impact: "high" as const,
+      effort: "quick" as const,
+      fixCode: "Optimized response times by 38% across 100k+ daily queries",
+    },
+    {
+      action: "Add a 3-sentence professional summary at the very top of your resume",
+      impact: "high" as const,
+      effort: "quick" as const,
+      fixCode: "Results-driven Software Engineer with expertise in scalable React & Node.js architecture...",
+    },
+    {
+      action: "Include your customized LinkedIn profile link in the header",
+      impact: "medium" as const,
+      effort: "quick" as const,
+      fixCode: "linkedin.com/in/yourname",
+    },
+    {
+      action: "Replace weak verbs ('assisted', 'helped') with 'Architected', 'Spearheaded', or 'Automated'",
+      impact: "high" as const,
+      effort: "quick" as const,
+      fixCode: "Spearheaded platform migration, cutting deployment cycles by 4 days",
+    },
+  ];
+
+  const strengths = [
+    hasEmail && hasPhone ? "Complete and direct candidate contact information" : "Clean structural layout",
+    quantRatio > 30 ? "Includes demonstrable impact metrics in work history" : "Clear chronological job progression",
+    skillsCount >= 8 ? "Solid breadth of industry technical proficiencies" : "Relevant domain background",
+    "Uses standard, ATS-parseable section hierarchy",
+  ];
+
+  const criticalIssues = [
+    !hasPhone ? "Missing direct phone number — immediate blocker for automated recruiter outreach" : "",
+    !hasSummary ? "Missing professional summary — reduces ATS semantic search match rate by up to 20%" : "",
+    quantRatio < 20 ? "Very low quantification density (<20%) — recruiters may skip past generic task lists" : "",
+  ].filter(Boolean);
+
+  let jdMatchData = undefined;
+  if (jdText.trim().length > 25) {
+    const jdKeywords = ["React", "TypeScript", "Node.js", "REST APIs", "Git", "Docker", "AWS", "CI/CD", "PostgreSQL", "System Architecture", "Performance", "Agile"];
+    const matched = jdKeywords.filter((k) => rawText.toLowerCase().includes(k.toLowerCase()));
+    const missing = jdKeywords.filter((k) => !rawText.toLowerCase().includes(k.toLowerCase()));
+    const jdScore = Math.min(95, Math.max(45, Math.round((matched.length / jdKeywords.length) * 100)));
+
+    jdMatchData = {
+      matchScore: jdScore,
+      verdict: jdScore >= 75 ? "Strong alignment with core job description requirements." : "Moderate match — key technical skills from the posting are absent.",
+      matchedKeywords: matched,
+      missingKeywords: missing,
+      bucketScores: {
+        keywords: jdScore,
+        completeness: 85,
+        quantification: quantRatio,
+        seniority: 80,
+        formatting: 90,
+      },
+    };
+  }
+
+  return {
+    overallScore: score,
+    grade,
+    verdict: score >= 80 
+      ? "Strong ATS score. Minor phrasing optimizations will position your resume in the top 5% of applicants."
+      : score >= 65 
+        ? "Good baseline alignment. Adding quantifiable metrics and an executive summary will boost your callback rate."
+        : "Several critical ATS gaps detected. Implement the recommendations below before submitting to automated portals.",
+    summaryFeedback: `Your resume currently scores ${score}/100 with a Grade of ${grade}. Your contact information and skill listings provide a solid baseline, but the work experience section requires higher quantification density (${quantRatio}% currently quantified) and stronger action verbs to pass top-tier ATS screening filters.`,
+    sections,
+    recommendations,
+    strengths,
+    criticalIssues,
+    quickWins,
+    metrics: {
+      quantifiedBulletsPercent: quantRatio,
+      actionVerbStrength: quantRatio >= 50 ? "Strong" : quantRatio >= 25 ? "Moderate" : "Needs Improvement",
+      contactCompleteness: [hasEmail, hasPhone, hasLinkedIn, hasLocation].filter(Boolean).length * 25,
+      skillsCount,
+      detectedSectionsCount: 5,
+      wordCount: rawText.split(/\s+/).length,
+    },
+    jdMatch: jdMatchData,
   };
 }
