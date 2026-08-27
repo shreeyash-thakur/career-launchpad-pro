@@ -1055,3 +1055,462 @@ function simulateFallbackAI(system: string, user: string): string {
 
   return "Spearheaded core technical initiatives, delivering high-impact solutions with measurable efficiency improvements.";
 }
+
+// ─── Enhanced Interview Prep (Difficulty Levels) ─────────────────────────────
+
+export type QuestionDifficulty = "beginner" | "intermediate" | "hard" | "bonus";
+
+export interface EnhancedInterviewQuestion {
+  question: string;
+  difficulty: QuestionDifficulty;
+  category: "behavioral" | "technical" | "situational" | "bonus";
+  context: string;
+  suggestedAnswer: string;
+  keyPointsToCover: string[];
+  redFlags: string[]; // common mistakes candidates make
+  timeToAnswer: string; // e.g. "2-3 minutes"
+}
+
+export interface EnhancedInterviewPrepResult {
+  beginner: EnhancedInterviewQuestion[];
+  intermediate: EnhancedInterviewQuestion[];
+  hard: EnhancedInterviewQuestion[];
+  bonus: EnhancedInterviewQuestion[];
+  overallTips: string[];
+  roleInsights: string;
+}
+
+export async function generateEnhancedInterviewPrep(params: {
+  resumeData: ResumeData;
+  jdText?: string;
+  roleTitle?: string;
+}): Promise<EnhancedInterviewPrepResult> {
+  const { resumeData, jdText = "", roleTitle = "" } = params;
+  const role = roleTitle || resumeData.personal.title || "Software Engineer";
+
+  const system = `You are an elite Tech Interview Coach and ex-FAANG Hiring Manager with 15+ years experience.
+Generate a comprehensive, categorized mock interview kit with questions across 4 difficulty levels.
+
+Return ONLY a single valid JSON object with this exact structure:
+{
+  "beginner": [
+    {
+      "question": "<beginner-level question>",
+      "difficulty": "beginner",
+      "category": "behavioral",
+      "context": "<why interviewers ask this and what they assess>",
+      "suggestedAnswer": "<clear STAR-structured answer outline with real talking points>",
+      "keyPointsToCover": ["<point 1>", "<point 2>", "<point 3>"],
+      "redFlags": ["<mistake 1>", "<mistake 2>"],
+      "timeToAnswer": "1-2 minutes"
+    }
+  ],
+  "intermediate": [<4 questions same shape>],
+  "hard": [<4 questions same shape>],
+  "bonus": [<3 curveball/creative questions same shape>],
+  "overallTips": ["<tip 1>", "<tip 2>", "<tip 3>", "<tip 4>", "<tip 5>"],
+  "roleInsights": "<2-3 sentence insight about what interviewers specifically look for in this role>"
+}
+
+Rules:
+- beginner: 4 questions — introductory, confidence-building, general career story, basic technical concepts
+- intermediate: 4 questions — role-specific scenarios, technical depth, collaboration, process questions
+- hard: 4 questions — system design, leadership under pressure, failure/ownership, advanced technical
+- bonus: 3 questions — creative/unconventional, culture fit, long-term vision, negotiation signals
+- Every answer must be actionable and specific, not generic platitudes
+- redFlags should warn what NOT to say/do for that question
+- Output ONLY the JSON — no preamble, no markdown`;
+
+  const user = `Role: ${role}
+${jdText ? `Job Description:\n${jdText.slice(0, 2000)}` : "No JD provided — generate general questions for this role type."}
+
+Candidate Background:
+${resumeToText(resumeData).slice(0, 2000)}`;
+
+  try {
+    const raw = await callAI(system, user, 3000);
+    const parsed = extractJSON<Partial<EnhancedInterviewPrepResult>>(raw);
+    return {
+      beginner: Array.isArray(parsed.beginner) ? parsed.beginner : [],
+      intermediate: Array.isArray(parsed.intermediate) ? parsed.intermediate : [],
+      hard: Array.isArray(parsed.hard) ? parsed.hard : [],
+      bonus: Array.isArray(parsed.bonus) ? parsed.bonus : [],
+      overallTips: Array.isArray(parsed.overallTips) ? parsed.overallTips : [],
+      roleInsights: typeof parsed.roleInsights === "string" ? parsed.roleInsights : "",
+    };
+  } catch {
+    // Deterministic fallback
+    return buildFallbackInterviewPrep(role);
+  }
+}
+
+function buildFallbackInterviewPrep(role: string): EnhancedInterviewPrepResult {
+  return {
+    roleInsights: `For ${role} positions, interviewers primarily assess three things: your technical problem-solving depth, your ability to communicate complex ideas clearly, and your track record of taking ownership under pressure. Preparation and concrete examples are your biggest differentiators.`,
+    overallTips: [
+      "Use the STAR method (Situation, Task, Action, Result) for every behavioral question — it keeps answers structured and time-boxed.",
+      "Prepare 3-4 core 'stories' from your experience that can be adapted to different behavioral questions.",
+      "For technical questions, always think aloud — interviewers care about your reasoning process, not just the final answer.",
+      "Research the company's recent product launches, engineering blog, and mission statement before the interview.",
+      "Prepare 2-3 thoughtful questions to ask the interviewer — it signals genuine interest and strategic thinking.",
+    ],
+    beginner: [
+      {
+        question: "Tell me about yourself and your background.",
+        difficulty: "beginner",
+        category: "behavioral",
+        context: "Interviewers use this to assess communication clarity, self-awareness, and how well your story aligns with the role. It sets the tone for the entire interview.",
+        suggestedAnswer: "Structure: 1) Where you started, 2) Key milestones and skills built, 3) Why you're excited about this role. Keep it to 90 seconds. Lead with your most relevant experience, not your entire life story.",
+        keyPointsToCover: ["Current role and core responsibilities", "Most relevant achievement or project", "Why this company/role specifically"],
+        redFlags: ["Reciting your entire resume chronologically", "Spending more than 2 minutes", "Not connecting your story to why you want THIS role"],
+        timeToAnswer: "1-2 minutes",
+      },
+      {
+        question: "Why do you want to leave your current job?",
+        difficulty: "beginner",
+        category: "behavioral",
+        context: "Tests professional maturity, self-awareness, and motivation. Interviewers check for red flags like negativity, instability, or unrealistic expectations.",
+        suggestedAnswer: "Always frame around growth and opportunity, not problems. Example: 'I've accomplished X and Y at my current company and I'm looking for an environment where I can [specific growth goal] — which is why this role stood out to me.'",
+        keyPointsToCover: ["Frame as moving toward something, not away from something", "Mention what you achieved before deciding to move", "Connect to specific things about this company"],
+        redFlags: ["Badmouthing your current employer", "Mentioning salary as the primary reason", "Saying you're bored (without context)"],
+        timeToAnswer: "1-2 minutes",
+      },
+      {
+        question: "What are your greatest strengths?",
+        difficulty: "beginner",
+        category: "behavioral",
+        context: "Tests self-awareness and whether your strengths match what the role actually needs. Interviewers want specifics, not generic buzzwords.",
+        suggestedAnswer: "Pick 2-3 strengths that are directly relevant to the role. Back each with a 1-sentence proof point. Example: 'One of my strongest skills is systems thinking — when we redesigned our API layer at [Company], I mapped 12 downstream dependencies before writing a single line of code, which helped us avoid 3 major breaking changes.'",
+        keyPointsToCover: ["Only mention strengths relevant to this job", "Back each strength with a concrete example", "Show self-awareness about how you apply them"],
+        redFlags: ["Generic answers like 'hardworking' or 'team player' without examples", "Listing too many strengths", "Claiming to have no weaknesses when asked about strengths"],
+        timeToAnswer: "2 minutes",
+      },
+      {
+        question: "Where do you see yourself in 5 years?",
+        difficulty: "beginner",
+        category: "behavioral",
+        context: "Assesses career ambition, realistic planning, and alignment with company growth paths. Interviewers want to know if you'll be a long-term contributor.",
+        suggestedAnswer: "Be specific about growth direction (technical depth vs leadership) while staying flexible. Example: 'In 5 years I'd like to have grown into a senior technical role where I'm leading architectural decisions and mentoring junior engineers — and I see this company as the right environment to build toward that.'",
+        keyPointsToCover: ["Show ambition without sounding like you want their boss's job", "Align your goals with realistic growth at this company", "Demonstrate you've thought about your career trajectory"],
+        redFlags: ["Saying you want to start your own company (unless relevant)", "Being completely vague ('I just want to grow')", "Making it sound like this role is just a stepping stone"],
+        timeToAnswer: "1-2 minutes",
+      },
+    ],
+    intermediate: [
+      {
+        question: "Describe a project you're most proud of and what made it successful.",
+        difficulty: "intermediate",
+        category: "behavioral",
+        context: "Reveals what you consider high-quality work, your ownership mentality, and how you define success. Interviewers listen for impact and your specific contribution.",
+        suggestedAnswer: "Choose a project where YOUR actions made a tangible difference. Structure: context → challenge → your specific decisions → measurable outcome. Quantify the impact (users affected, latency improved, revenue generated). Be ready to discuss what you'd do differently.",
+        keyPointsToCover: ["Clearly define YOUR role vs the team's role", "Quantify the outcome", "Mention what was technically challenging and how you solved it"],
+        redFlags: ["Describing a team success without clarifying your specific contribution", "Choosing something too small or routine", "Not having a metric to back up success"],
+        timeToAnswer: "3-4 minutes",
+      },
+      {
+        question: "Tell me about a time you disagreed with a technical decision and what you did.",
+        difficulty: "intermediate",
+        category: "behavioral",
+        context: "Assesses professional maturity, how you handle conflict, and whether you can advocate for your technical opinion while maintaining team cohesion.",
+        suggestedAnswer: "STAR: Situation — technical decision that concerned you. Task — you needed to advocate without creating conflict. Action — you gathered data/evidence, requested a discussion, presented alternatives. Result — either changed the decision or committed gracefully after being heard. Show you can disagree and commit.",
+        keyPointsToCover: ["Show you raised the concern constructively, not passively", "Demonstrate using data/evidence rather than opinion", "Show you respected the final decision even if you disagreed"],
+        redFlags: ["Making the other person sound incompetent", "Not having a specific example", "Saying you always agree with your manager"],
+        timeToAnswer: "3-4 minutes",
+      },
+      {
+        question: "How do you handle competing priorities and deadlines?",
+        difficulty: "intermediate",
+        category: "situational",
+        context: "Tests project management skills, communication with stakeholders, and decision-making under pressure. Common in fast-paced environments.",
+        suggestedAnswer: "Walk through your prioritization framework: 1) Clarify impact and urgency with stakeholders, 2) Break work into milestones and communicate ETAs early, 3) Escalate blockers immediately rather than absorbing them silently. Give a specific example where you navigated this well.",
+        keyPointsToCover: ["Show a systematic prioritization approach (not just 'I work harder')", "Emphasize proactive communication over heroic effort", "Mention the outcome — did you deliver?"],
+        redFlags: ["Saying you 'just focus and get it all done'", "Not mentioning stakeholder communication", "Giving an example where you missed a deadline without owning it"],
+        timeToAnswer: "2-3 minutes",
+      },
+      {
+        question: "What's your approach to code/work quality vs delivery speed?",
+        difficulty: "intermediate",
+        category: "technical",
+        context: "Reveals your engineering philosophy and pragmatism. Interviewers look for nuanced thinking — neither 'always perfect code' nor 'ship anything fast' is the right answer.",
+        suggestedAnswer: "The right answer is context-dependent. For MVPs/experiments: ship fast and clean up later. For core infrastructure: invest in quality upfront. Show you've navigated this trade-off consciously and document technical debt you've taken on intentionally.",
+        keyPointsToCover: ["Show you understand the business context drives the decision", "Mention how you document and manage technical debt", "Give an example of each end of the spectrum"],
+        redFlags: ["Claiming you always write perfect code", "Saying speed always wins", "Not understanding the concept of technical debt"],
+        timeToAnswer: "2-3 minutes",
+      },
+    ],
+    hard: [
+      {
+        question: "Tell me about a time you failed significantly. What happened and what did you learn?",
+        difficulty: "hard",
+        category: "behavioral",
+        context: "One of the most revealing questions in any interview. Tests psychological safety, ownership mentality, and growth mindset. Many candidates deflect or minimize — don't.",
+        suggestedAnswer: "Choose a real failure with real consequences — not a fake weakness. Structure: what the failure was → what YOUR role was → what the impact was → what you changed specifically. The learning must be concrete and applied, not just 'I learned to be more careful.'",
+        keyPointsToCover: ["Own the failure completely — don't blame external factors", "Show the impact was real (not trivial)", "The learning must have changed something about how you work"],
+        redFlags: ["Choosing a 'humblebrag' failure like 'I work too hard'", "Blaming others", "Not having a concrete example", "A failure with no genuine learning"],
+        timeToAnswer: "3-4 minutes",
+      },
+      {
+        question: "Design a system that can handle 1 million concurrent users. Walk me through your architecture.",
+        difficulty: "hard",
+        category: "technical",
+        context: "Classic system design question testing architectural thinking, scalability awareness, and trade-off analysis. There's no single right answer — the process matters more than the solution.",
+        suggestedAnswer: "Structure: 1) Clarify requirements (read-heavy? write-heavy? consistency vs availability?), 2) Estimate scale (QPS, data size), 3) High-level architecture (load balancer → application servers → caching layer → database), 4) Deep-dive one component, 5) Discuss trade-offs. Use CAP theorem, horizontal vs vertical scaling, caching strategies.",
+        keyPointsToCover: ["Always clarify requirements before designing", "Estimate numbers (1M users ≈ ~10K QPS)", "Address the single points of failure", "Discuss database sharding, caching (Redis), CDNs"],
+        redFlags: ["Starting to design without clarifying requirements", "Not considering failure scenarios", "Presenting only one solution without trade-offs", "Ignoring data consistency requirements"],
+        timeToAnswer: "25-35 minutes (for full system design round)",
+      },
+      {
+        question: "You've just inherited a poorly documented legacy codebase that the business depends on. How do you approach it?",
+        difficulty: "hard",
+        category: "situational",
+        context: "Tests pragmatism, risk management, and ability to create value in imperfect conditions. Common in scale-up/enterprise environments.",
+        suggestedAnswer: "Phase 1: Understand without breaking (read tests, run the system, shadow existing engineers). Phase 2: Map the critical paths (which code paths process money/data/auth?). Phase 3: Add tests before refactoring. Phase 4: Incrementally modernize high-risk areas. Communicate your plan to stakeholders and set realistic timelines.",
+        keyPointsToCover: ["Never refactor without tests first", "Identify and protect the 'critical paths' first", "Communicate timelines and risk to non-technical stakeholders", "Document as you go"],
+        redFlags: ["Immediately proposing a full rewrite", "Not prioritizing business continuity", "Not involving domain experts who built it"],
+        timeToAnswer: "4-5 minutes",
+      },
+      {
+        question: "How do you drive technical change or adoption of new practices in a resistant team?",
+        difficulty: "hard",
+        category: "behavioral",
+        context: "Tests leadership, influence without authority, change management, and long-term thinking. Important for senior and lead roles.",
+        suggestedAnswer: "The key is making it easy to adopt and hard to ignore: 1) Build a proof of concept that solves a real pain point, 2) Find early adopters to champion the change, 3) Make the new practice the path of least resistance (tooling, templates), 4) Celebrate wins publicly. Show patience — change takes months, not weeks.",
+        keyPointsToCover: ["Lead by example first — don't just advocate", "Find allies and early adopters on the team", "Measure and share the impact of the change", "Acknowledge and address legitimate concerns from resistors"],
+        redFlags: ["Forcing adoption from the top down", "Not addressing the team's real concerns", "Giving up after initial resistance", "Not measuring whether the change actually helped"],
+        timeToAnswer: "4-5 minutes",
+      },
+    ],
+    bonus: [
+      {
+        question: "If you could change one thing about how software teams work, what would it be?",
+        difficulty: "bonus",
+        category: "bonus",
+        context: "Tests depth of engineering philosophy, independent thinking, and genuine passion for the craft. Interviewers want an opinion, not a safe answer.",
+        suggestedAnswer: "Have a genuine, specific opinion. Examples: 'More async-first communication to reduce meeting fatigue', 'Better investment in internal tooling that 10x developer productivity', 'Integrating design and engineering earlier in the product lifecycle.' Be ready to defend your position with a real experience.",
+        keyPointsToCover: ["Be specific — not 'better communication' but HOW", "Back it with a real observation or experience", "Show you've thought about engineering culture deliberately"],
+        redFlags: ["Giving a vague non-answer to seem agreeable", "Proposing something wildly impractical", "Not being able to back up your opinion"],
+        timeToAnswer: "2-3 minutes",
+      },
+      {
+        question: "What's a technology or approach you learned recently purely out of curiosity?",
+        difficulty: "bonus",
+        category: "bonus",
+        context: "Reveals intrinsic motivation, learning agility, and intellectual curiosity. Strong signals: breadth of exploration, depth of understanding, and ability to apply learning cross-functionally.",
+        suggestedAnswer: "Have something real and recent ready. Be specific: 'I've been exploring [technology] because I was curious about [specific aspect]. I built a small [project] with it and discovered [genuine insight].' Connecting it to how it might apply to your work makes it even stronger.",
+        keyPointsToCover: ["Be genuine — pick something you actually explored", "Show depth: not just 'I read about it' but 'I built something'", "Bonus points: connecting it to the work at this company"],
+        redFlags: ["Saying you don't really learn things outside of work", "Picking something from 5 years ago", "Being unable to explain what you learned at a technical level"],
+        timeToAnswer: "2-3 minutes",
+      },
+      {
+        question: "Walk me through how you would evaluate whether to use AI/LLMs in a new product feature.",
+        difficulty: "bonus",
+        category: "bonus",
+        context: "High-relevance question for modern engineering roles. Tests pragmatism, product sense, and whether you think about AI as a tool vs. a trend.",
+        suggestedAnswer: "Framework: 1) Is the problem actually ambiguous/language-based (where AI excels) or deterministic (where rules/code is better)? 2) What's the cost and latency tolerance? 3) What happens when the AI is wrong (how bad is a hallucination here)? 4) Can you evaluate quality systematically? Build a simple eval set before shipping. Start with the cheapest model that meets your accuracy bar.",
+        keyPointsToCover: ["AI is not always the right tool — show you know when NOT to use it", "Latency, cost, and failure mode analysis", "How to build an evaluation framework", "Iterative approach: don't over-engineer the first version"],
+        redFlags: ["Treating AI as a magic solution", "Not thinking about failure cases (hallucinations, latency)", "No mention of cost or evaluation methodology"],
+        timeToAnswer: "3-4 minutes",
+      },
+    ],
+  };
+}
+
+// ─── Resume-Only ATS Analysis (No JD Required) ────────────────────────────────
+
+export interface ResumeOnlyATSResult {
+  overallScore: number;
+  grade: "A" | "B" | "C" | "D" | "F";
+  verdict: string;
+  sections: {
+    name: string;
+    score: number;
+    status: "excellent" | "good" | "needs-work" | "missing";
+    issues: string[];
+    fixes: string[];
+  }[];
+  quickWins: { action: string; impact: "high" | "medium" | "low"; effort: "quick" | "medium" | "involved" }[];
+  strengths: string[];
+  criticalIssues: string[];
+}
+
+export async function analyzeResumeATSOnly(params: {
+  resumeData: ResumeData;
+  jobDescription?: string;
+}): Promise<ResumeOnlyATSResult> {
+  const { resumeData, jobDescription = "" } = params;
+  const resumeText = resumeToText(resumeData);
+
+  const system = `You are an expert ATS (Applicant Tracking System) specialist and senior recruiter with 15+ years evaluating resumes.
+Analyze the provided resume and return a comprehensive ATS quality audit.
+${jobDescription ? "A target job description is also provided — factor keyword alignment into your analysis." : "No job description provided — perform a general ATS quality analysis."}
+
+Return ONLY a single valid JSON object:
+{
+  "overallScore": <integer 0-100>,
+  "grade": "<A|B|C|D|F>",
+  "verdict": "<honest 1-2 sentence overall assessment>",
+  "sections": [
+    {
+      "name": "<section name e.g. Contact Info, Summary, Experience, Skills, Education, Projects>",
+      "score": <0-100>,
+      "status": "<excellent|good|needs-work|missing>",
+      "issues": ["<specific issue 1>", "<specific issue 2>"],
+      "fixes": ["<specific actionable fix 1>", "<specific actionable fix 2>"]
+    }
+  ],
+  "quickWins": [
+    {
+      "action": "<specific action to take>",
+      "impact": "<high|medium|low>",
+      "effort": "<quick|medium|involved>"
+    }
+  ],
+  "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
+  "criticalIssues": ["<critical issue 1>", "<critical issue 2>"]
+}
+
+Analyze these specific ATS criteria:
+1. Contact section completeness (name, email, phone, LinkedIn, location)
+2. Professional summary quality and keyword density
+3. Experience bullets: action verbs, quantified impact, relevance
+4. Skills section: specificity, ATS-parseable format
+5. Education section completeness
+6. Projects (if any): technical depth and impact
+7. Overall formatting: ATS-parseable structure, no tables/columns that break parsing
+8. Keyword optimization and density
+9. Quantified achievements (numbers, percentages, dollar amounts)
+10. Verb strength (avoided weak verbs like "helped", "was involved in")
+
+Be specific and actionable. Output ONLY the JSON.`;
+
+  const user = `Resume Content:
+${resumeText.slice(0, 3500)}
+${jobDescription ? `\nTarget Job Description:\n${jobDescription.slice(0, 1500)}` : ""}
+
+Analyze this resume comprehensively and return the JSON audit.`;
+
+  try {
+    const raw = await callAI(system, user, 2000);
+    const parsed = extractJSON<Partial<ResumeOnlyATSResult>>(raw);
+    return {
+      overallScore: typeof parsed.overallScore === "number" ? Math.max(0, Math.min(100, parsed.overallScore)) : 65,
+      grade: (parsed.grade as any) || "C",
+      verdict: parsed.verdict || "Resume has solid foundations with specific improvements needed for ATS optimization.",
+      sections: Array.isArray(parsed.sections) ? parsed.sections : [],
+      quickWins: Array.isArray(parsed.quickWins) ? parsed.quickWins : [],
+      strengths: Array.isArray(parsed.strengths) ? parsed.strengths : [],
+      criticalIssues: Array.isArray(parsed.criticalIssues) ? parsed.criticalIssues : [],
+    };
+  } catch {
+    return buildFallbackATSAudit(resumeData);
+  }
+}
+
+function buildFallbackATSAudit(resumeData: ResumeData): ResumeOnlyATSResult {
+  const hasPhone = !!resumeData.personal.phone;
+  const hasLinkedIn = !!resumeData.personal.linkedin;
+  const hasSummary = resumeData.summary && resumeData.summary.trim().length > 30;
+  const hasExperience = resumeData.experience && resumeData.experience.length > 0;
+  const allBullets = resumeData.experience?.flatMap((e) => e.bullets || []).filter(Boolean) || [];
+  const metricRegex = /\b\d+(\.\d+)?%?|\$|[\d,]+(\+)?\s*(users|clients|revenue|latency|hours|days|teams|projects|x|times)\b/i;
+  const quantifiedBullets = allBullets.filter((b) => metricRegex.test(b));
+  const quantRatio = allBullets.length > 0 ? quantifiedBullets.length / allBullets.length : 0;
+
+  let score = 50;
+  if (hasPhone) score += 5;
+  if (hasLinkedIn) score += 5;
+  if (hasSummary) score += 10;
+  if (hasExperience) score += 10;
+  if (quantRatio > 0.5) score += 10;
+  if (resumeData.skills?.length > 0) score += 5;
+  if (resumeData.education?.length > 0) score += 5;
+
+  const grade = score >= 85 ? "A" : score >= 70 ? "B" : score >= 55 ? "C" : score >= 40 ? "D" : "F";
+
+  return {
+    overallScore: score,
+    grade,
+    verdict: `Your resume scores ${score}/100 on ATS optimization. ${score >= 70 ? "Strong foundation with room for targeted improvements." : "Several key sections need strengthening to pass automated screening systems."}`,
+    strengths: [
+      hasExperience ? "Work experience section is present and structured" : "Resume has a clear layout",
+      resumeData.skills?.length > 0 ? "Skills section helps ATS keyword matching" : "Contact information is present",
+      resumeData.projects?.length > 0 ? "Projects demonstrate hands-on technical ability" : "Education section adds credibility",
+    ],
+    criticalIssues: [
+      !hasPhone ? "Missing phone number — many ATS systems require this for candidate contact" : "",
+      !hasSummary ? "No professional summary — this is prime real estate for ATS keywords" : "",
+      quantRatio < 0.3 ? "Less than 30% of experience bullets have quantified metrics — ATS and recruiters prioritize measurable impact" : "",
+    ].filter(Boolean),
+    sections: [
+      {
+        name: "Contact Information",
+        score: [hasPhone, hasLinkedIn, !!resumeData.personal.email, !!resumeData.personal.location].filter(Boolean).length * 25,
+        status: hasPhone && hasLinkedIn ? "excellent" : hasPhone || hasLinkedIn ? "good" : "needs-work",
+        issues: [
+          !hasPhone ? "Phone number is missing" : "",
+          !hasLinkedIn ? "LinkedIn URL not included" : "",
+          !resumeData.personal.location ? "Location missing (city/state minimum)" : "",
+        ].filter(Boolean),
+        fixes: [
+          "Add a professional phone number",
+          "Include your LinkedIn profile URL (linkedin.com/in/yourname)",
+          "Add city and state/country — many ATS systems filter by location",
+        ],
+      },
+      {
+        name: "Professional Summary",
+        score: hasSummary ? 75 : 20,
+        status: hasSummary ? "good" : "missing",
+        issues: !hasSummary ? ["No professional summary present — this is prime ATS real estate"] : ["Summary may benefit from more role-specific keywords"],
+        fixes: ["Add a 2-4 sentence summary targeting your role title", "Include 3-5 high-value keywords from target job descriptions in your summary", "Lead with your years of experience and specialization"],
+      },
+      {
+        name: "Work Experience",
+        score: hasExperience ? (quantRatio > 0.5 ? 80 : quantRatio > 0.25 ? 60 : 40) : 0,
+        status: !hasExperience ? "missing" : quantRatio > 0.5 ? "good" : "needs-work",
+        issues: [
+          !hasExperience ? "No work experience listed" : "",
+          quantRatio < 0.3 ? `Only ${Math.round(quantRatio * 100)}% of bullets have measurable metrics` : "",
+          allBullets.some((b) => b.toLowerCase().startsWith("helped") || b.toLowerCase().startsWith("assisted")) ? "Some bullets use weak verbs (helped, assisted, worked on)" : "",
+        ].filter(Boolean),
+        fixes: [
+          "Start every bullet with a strong action verb (Led, Built, Reduced, Increased, Launched)",
+          "Add numbers to at least 50% of bullets (team size, % improvement, revenue, users)",
+          "Each bullet should follow: [Verb] + [What you did] + [Impact/Result]",
+        ],
+      },
+      {
+        name: "Skills",
+        score: resumeData.skills?.some((s) => s.items.length > 3) ? 80 : 40,
+        status: resumeData.skills?.length > 0 ? "good" : "missing",
+        issues: [
+          !resumeData.skills?.length ? "No skills section found" : "",
+          resumeData.skills?.some((s) => s.items.length < 3) ? "Some skill categories have very few items listed" : "",
+        ].filter(Boolean),
+        fixes: [
+          "List specific tools and technologies, not vague skills (e.g. 'React 18' not 'JavaScript frameworks')",
+          "Group skills into categories (Languages, Frameworks, Tools, Cloud, etc.)",
+          "Include skills mentioned in the job descriptions you're targeting",
+        ],
+      },
+      {
+        name: "Education",
+        score: resumeData.education?.length > 0 ? 85 : 30,
+        status: resumeData.education?.length > 0 ? "good" : "needs-work",
+        issues: !resumeData.education?.length ? ["Education section missing or empty"] : [],
+        fixes: [
+          "Include your degree, field of study, institution name, and graduation year",
+          "Add GPA if above 3.5/4.0 or equivalent",
+          "List relevant coursework for entry-level positions",
+        ],
+      },
+    ],
+    quickWins: [
+      { action: "Add quantified metrics to at least 3 experience bullets (numbers, %, $)", impact: "high", effort: "quick" },
+      { action: "Include a 3-sentence professional summary with target role keywords", impact: "high", effort: "quick" },
+      { action: "Add LinkedIn URL and phone number to contact section", impact: "medium", effort: "quick" },
+      { action: "Replace weak verbs (helped, assisted, worked on) with strong action verbs", impact: "medium", effort: "quick" },
+      { action: "Add 5-10 more specific technical skills matching your target job descriptions", impact: "high", effort: "medium" },
+    ],
+  };
+}
