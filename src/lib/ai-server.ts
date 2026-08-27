@@ -302,6 +302,48 @@ export function parseParsedResume(raw: string): ParsedResume {
   return parsedResumeSchema.parse({});
 }
 
+/**
+ * Schema for the AI Resume Optimizer. The model only ever returns the
+ * *suggested* replacement text — the "before" side of every diff is
+ * always pulled straight from the resume the client already has, keyed
+ * by the ids the client itself supplied. This means the model can never
+ * misrepresent what the original said, and the client can safely apply
+ * an accepted change by just overwriting the matching id.
+ *
+ * Only include an entry when there's a genuine, specific improvement to
+ * suggest — the optimizer must never rewrite something that's already
+ * good just to have something to show, and must never invent facts,
+ * numbers, or skills that weren't already in the resume.
+ */
+export const resumeOptimizationSchema = z.object({
+  summary: z.string().nullable().catch(null),
+  experienceBullets: z
+    .array(
+      z.object({
+        experienceId: z.string(),
+        bulletIndex: z.number().int().min(0),
+        after: z.string(),
+      }),
+    )
+    .catch([]),
+  projectDescriptions: z
+    .array(
+      z.object({
+        projectId: z.string(),
+        after: z.string(),
+      }),
+    )
+    .catch([]),
+});
+export type ResumeOptimizationResult = z.infer<typeof resumeOptimizationSchema>;
+
+export function parseResumeOptimizationResult(raw: string): ResumeOptimizationResult {
+  const extracted = extractJSON<unknown>(raw);
+  const result = resumeOptimizationSchema.safeParse(extracted);
+  if (result.success) return result.data;
+  return resumeOptimizationSchema.parse({ summary: null });
+}
+
 export function parseStringArray(raw: string, max: number): string[] {
   try {
     const parsed = extractJSON<unknown>(raw);

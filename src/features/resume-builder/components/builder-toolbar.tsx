@@ -32,6 +32,7 @@ import { downloadJson, readJsonFile, type ExportFormat } from "../utils/export";
 import { calculateResumeCompletion } from "../utils/completion";
 import { ResumeReadyModal } from "./resume-ready-modal";
 import { DownloadMenu } from "./download-menu";
+import { ResumeOptimizerDialog } from "./resume-optimizer-dialog";
 import { useResumeExport } from "./resume-export-surface";
 import { toast } from "sonner";
 
@@ -49,6 +50,7 @@ interface Props {
   onResetBlank: () => void;
   onResetSample: () => void;
   isCloudSynced?: boolean;
+  uid?: string | undefined;
 }
 
 export function BuilderToolbar({
@@ -65,10 +67,12 @@ export function BuilderToolbar({
   onResetBlank,
   onResetSample,
   isCloudSynced = false,
+  uid,
 }: Props) {
   const importRef = useRef<HTMLInputElement>(null);
   const [readyModalOpen, setReadyModalOpen] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
+  const [optimizerOpen, setOptimizerOpen] = useState(false);
 
   const completion = calculateResumeCompletion(data);
 
@@ -206,6 +210,17 @@ export function BuilderToolbar({
 
           <div className="mx-1 h-5 w-px bg-border hidden sm:block" />
 
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-xs border-primary/40 text-primary hover:bg-primary/10 hover:text-primary"
+            onClick={() => setOptimizerOpen(true)}
+          >
+            <Sparkles className="size-3.5" /> Optimize
+          </Button>
+
+          <div className="mx-1 h-5 w-px bg-border hidden sm:block" />
+
           <input
             ref={importRef}
             type="file"
@@ -280,6 +295,14 @@ export function BuilderToolbar({
         onOpenChange={setReadyModalOpen}
         pageSize={style.pageSize}
         resumeTitle={title}
+      />
+
+      <ResumeOptimizerDialog
+        open={optimizerOpen}
+        onOpenChange={setOptimizerOpen}
+        uid={uid}
+        resumeData={data}
+        onApply={onReplaceData}
       />
     </>
   );

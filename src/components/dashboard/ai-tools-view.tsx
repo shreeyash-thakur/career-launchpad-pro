@@ -1,14 +1,6 @@
 import React from "react";
 import { Link } from "@tanstack/react-router";
-import {
-  Sparkles,
-  Wand2,
-  Bot,
-  FileSearch,
-  Zap,
-  ArrowRight,
-  ListChecks,
-} from "lucide-react";
+import { Sparkles, Wand2, Bot, FileSearch, Zap, ArrowRight, ListChecks } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -47,9 +39,9 @@ export function AiToolsView() {
           </div>
           <h3 className="font-display text-base font-bold">Summary &amp; Bullet Writer</h3>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Open any resume in the editor and use the <strong>Write with AI</strong> buttons on
-            your Summary, Experience bullets, and Project descriptions. Each one reads your role,
-            skills, and existing content to generate results tailored to you.
+            Open any resume in the editor and use the <strong>Write with AI</strong> buttons on your
+            Summary, Experience bullets, and Project descriptions. Each one reads your role, skills,
+            and existing content to generate results tailored to you.
           </p>
           <Button asChild size="sm" variant="outline" className="gap-1.5 text-xs">
             <Link to="/dashboard" search={{ tab: "resumes" }}>
@@ -90,6 +82,23 @@ export function AiToolsView() {
           </Button>
         </div>
 
+        <div className="rounded-3xl border border-border bg-card p-6 space-y-3">
+          <div className="flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <Sparkles className="size-5" />
+          </div>
+          <h3 className="font-display text-base font-bold">AI Resume Optimizer</h3>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Open the <strong>Optimize</strong> button in the editor toolbar to scan your whole
+            resume at once and review every suggested rewrite as a before/after — accept or reject
+            each one individually before anything is applied.
+          </p>
+          <Button asChild size="sm" variant="outline" className="gap-1.5 text-xs">
+            <Link to="/dashboard" search={{ tab: "resumes" }}>
+              Open a resume <ArrowRight className="size-3.5" />
+            </Link>
+          </Button>
+        </div>
+
         <div className="rounded-3xl border border-border bg-card p-6 space-y-3 opacity-90">
           <div className="flex size-10 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
             <Bot className="size-5" />
@@ -111,26 +120,58 @@ export function AiToolsView() {
           <h3 className="font-display text-base font-bold">Executive Action Verb Reference</h3>
         </div>
         <p className="text-xs text-muted-foreground -mt-4">
-          A quick-reference word bank — swap weak, passive phrasing in your bullets for one of
-          these instead.
+          A quick-reference word bank — swap weak, passive phrasing in your bullets for one of these
+          instead.
         </p>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <VerbGroup
             title="Leadership & Ownership"
-            verbs={["Spearheaded", "Orchestrated", "Directed", "Championed", "Guided", "Steered", "Mobilized"]}
+            verbs={[
+              "Spearheaded",
+              "Orchestrated",
+              "Directed",
+              "Championed",
+              "Guided",
+              "Steered",
+              "Mobilized",
+            ]}
           />
           <VerbGroup
             title="Engineering & Building"
-            verbs={["Architected", "Engineered", "Constructed", "Deployed", "Implemented", "Devised", "Configured"]}
+            verbs={[
+              "Architected",
+              "Engineered",
+              "Constructed",
+              "Deployed",
+              "Implemented",
+              "Devised",
+              "Configured",
+            ]}
           />
           <VerbGroup
             title="Growth & Optimization"
-            verbs={["Accelerated", "Amplified", "Maximized", "Streamlined", "Elevated", "Scaled", "Revitalized"]}
+            verbs={[
+              "Accelerated",
+              "Amplified",
+              "Maximized",
+              "Streamlined",
+              "Elevated",
+              "Scaled",
+              "Revitalized",
+            ]}
           />
           <VerbGroup
             title="Analysis & Problem Solving"
-            verbs={["Identified", "Diagnosed", "Overhauled", "Formulated", "Synthesized", "Resolved", "Standardized"]}
+            verbs={[
+              "Identified",
+              "Diagnosed",
+              "Overhauled",
+              "Formulated",
+              "Synthesized",
+              "Resolved",
+              "Standardized",
+            ]}
           />
         </div>
       </div>

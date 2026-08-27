@@ -228,6 +228,7 @@ function BuilderPage() {
         onResetBlank={() => store.resetToBlank(blankResume())}
         onResetSample={() => setData(sampleResume())}
         isCloudSynced={Boolean(search.resumeId && user?.uid)}
+        uid={user?.uid}
       />
 
       {/* Mobile Edit/Preview toggle — desktop shows both panels side by side,

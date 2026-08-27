@@ -244,6 +244,36 @@ CRITICAL RULES — this is the most important part of your job:
     return parseParsedResume(raw);
   });
 
+const optimizeResumeFn = createServerFn({ method: "POST" })
+  .validator(z.object({ uid: z.string().optional(), payload: z.string() }))
+  .handler(async ({ data }) => {
+    const { callAI, parseResumeOptimizationResult, checkRateLimit } =
+      await import("@/lib/ai-server");
+    checkRateLimit(data.uid ?? "anonymous");
+    const system = `You are an expert resume editor. You will be given a resume as JSON, including stable ids for each experience entry and project. Suggest improved rewrites for weak content — do NOT touch entries that are already strong.
+
+Respond with ONLY a single JSON object, no explanation, no markdown fences. Your entire response must start with { and end with }.
+
+{
+  "summary": "<improved summary>" or null if the existing summary is already strong or empty,
+  "experienceBullets": [{ "experienceId": "<id from input>", "bulletIndex": <0-based index>, "after": "<improved bullet>" }],
+  "projectDescriptions": [{ "projectId": "<id from input>", "after": "<improved description>" }]
+}
+
+CRITICAL RULES:
+- NEVER invent facts, numbers, metrics, technologies, or achievements that aren't already stated or clearly implied by the existing text. If a bullet has no numbers, improve its clarity/impact/wording WITHOUT adding a fabricated number.
+- Only include an entry if you have a genuine, specific improvement — better action verb, tighter wording, clearer impact, more professional tone, improved ATS phrasing. If something is already well-written, leave it out entirely — do not "improve" it just to have output.
+- Use the exact experienceId / projectId values from the input, unchanged.
+- Keep each rewrite roughly the same length as the original (don't balloon a one-line bullet into a paragraph).
+- Preserve the person's actual meaning — you are polishing, not reinventing their career.
+- Output raw JSON only.`;
+
+    const user = `Resume JSON:\n${data.payload.slice(0, 6000)}\n\nRemember: respond with ONLY the JSON object described in the system prompt. Never fabricate facts.`;
+
+    const raw = await callAI(system, user, 2500);
+    return parseResumeOptimizationResult(raw);
+  });
+
 // ─── Public client API ───────────────────────────────────────────────────────
 // Same names/signatures as the original client-side module. Internally
 // these just call the server functions above.
@@ -432,4 +462,152 @@ export function resumeToText(data: ResumeData): string {
     lines.push(`${cert.name} — ${cert.issuer}`);
   }
   return lines.filter(Boolean).join("\n");
+}
+
+// ─── Resume Optimizer (accept/reject diffs) ─────────────────────────────────
+
+export interface ResumeChange {
+  /** Stable key for this suggestion within the batch (for React keys / accept-reject tracking). */
+  id: string;
+  type: "summary" | "experience-bullet" | "project-description";
+  /** Human label for the diff card, e.g. "Acme Corp — bullet 2". */
+  label: string;
+  before: string;
+  after: string;
+}
+
+/**
+ * Runs the AI optimizer and returns a list of proposed changes. Every
+ * "before" value is read directly from the ResumeData passed in — never
+ * from what the model echoed back — so an accepted change can never
+ * apply against stale or hallucinated original text. No-op suggestions
+ * (after === before, or empty) are filtered out here too.
+ */
+export async function optimizeResume(params: {
+  uid?: string;
+  resumeData: ResumeData;
+}): Promise<ResumeChange[]> {
+  const { resumeData } = params;
+
+  const payload = JSON.stringify({
+    summary: resumeData.summary,
+    experience: resumeData.experience.map((e) => ({
+      id: e.id,
+      role: e.role,
+      company: e.company,
+      bullets: e.bullets,
+    })),
+    projects: resumeData.projects.map((p) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      tech: p.tech,
+    })),
+  });
+
+  const result = await optimizeResumeFn({
+    data: { ...(params.uid ? { uid: params.uid } : {}), payload },
+  });
+
+  const changes: ResumeChange[] = [];
+
+  if (
+    result.summary &&
+    result.summary.trim() &&
+    result.summary.trim() !== resumeData.summary.trim()
+  ) {
+    changes.push({
+      id: "summary",
+      type: "summary",
+      label: "Professional Summary",
+      before: resumeData.summary,
+      after: result.summary.trim(),
+    });
+  }
+
+  for (const suggestion of result.experienceBullets) {
+    const exp = resumeData.experience.find((e) => e.id === suggestion.experienceId);
+    if (!exp) continue;
+    const before = exp.bullets[suggestion.bulletIndex];
+    if (before === undefined) continue;
+    const after = suggestion.after.trim();
+    if (!after || after === before.trim()) continue;
+    changes.push({
+      id: `exp-${exp.id}-${suggestion.bulletIndex}`,
+      type: "experience-bullet",
+      label: `${exp.company || exp.role || "Experience"} — bullet ${suggestion.bulletIndex + 1}`,
+      before,
+      after,
+    });
+  }
+
+  for (const suggestion of result.projectDescriptions) {
+    const proj = resumeData.projects.find((p) => p.id === suggestion.projectId);
+    if (!proj) continue;
+    const after = suggestion.after.trim();
+    if (!after || after === proj.description.trim()) continue;
+    changes.push({
+      id: `proj-${proj.id}`,
+      type: "project-description",
+      label: `${proj.name || "Project"} description`,
+      before: proj.description,
+      after,
+    });
+  }
+
+  return changes;
+}
+
+/**
+ * Applies a set of accepted ResumeChanges to a ResumeData, returning a new
+ * object (does not mutate the input). Changes not present in
+ * `acceptedIds` are skipped, leaving that field untouched.
+ */
+export function applyResumeChanges(
+  resumeData: ResumeData,
+  changes: ResumeChange[],
+  acceptedIds: Set<string>,
+): ResumeData {
+  let next = resumeData;
+
+  const summaryChange = changes.find((c) => c.type === "summary" && acceptedIds.has(c.id));
+  if (summaryChange) {
+    next = { ...next, summary: summaryChange.after };
+  }
+
+  const bulletChanges = changes.filter(
+    (c) => c.type === "experience-bullet" && acceptedIds.has(c.id),
+  );
+  if (bulletChanges.length > 0) {
+    next = {
+      ...next,
+      experience: next.experience.map((exp) => {
+        const relevant = bulletChanges.filter((c) => c.id.startsWith(`exp-${exp.id}-`));
+        if (relevant.length === 0) return exp;
+        const bullets = [...exp.bullets];
+        for (const change of relevant) {
+          const idx = Number(change.id.slice(`exp-${exp.id}-`.length));
+          if (!Number.isNaN(idx) && idx >= 0 && idx < bullets.length) {
+            bullets[idx] = change.after;
+          }
+        }
+        return { ...exp, bullets };
+      }),
+    };
+  }
+
+  const projectChanges = changes.filter(
+    (c) => c.type === "project-description" && acceptedIds.has(c.id),
+  );
+  if (projectChanges.length > 0) {
+    const byProjectId = new Map(projectChanges.map((c) => [c.id.replace(/^proj-/, ""), c.after]));
+    next = {
+      ...next,
+      projects: next.projects.map((p) =>
+        byProjectId.has(p.id) ? { ...p, description: byProjectId.get(p.id)! } : p,
+      ),
+    };
+  }
+
+  return next;
 }
