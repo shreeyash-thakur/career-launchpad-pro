@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
+  Download,
   Redo2,
   Undo2,
   FileJson,
@@ -12,6 +13,7 @@ import {
   LayoutDashboard,
   CloudCheck,
   Edit2,
+  Wand2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,13 +30,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { ResumeData, ResumeStyle } from "../types";
 import type { SaveStatus } from "../hooks/use-resume-store";
-import { downloadJson, readJsonFile, type ExportFormat } from "../utils/export";
+import { downloadJson, printResume, readJsonFile } from "../utils/export";
 import { calculateResumeCompletion } from "../utils/completion";
 import { ResumeReadyModal } from "./resume-ready-modal";
-import { DownloadMenu } from "./download-menu";
-import { ResumeOptimizerDialog } from "./resume-optimizer-dialog";
-import { useResumeExport } from "./resume-export-surface";
-import { toast } from "sonner";
+import { ResumeTailoringDialog } from "./resume-tailoring-dialog";
 
 interface Props {
   title: string;
@@ -46,11 +45,11 @@ interface Props {
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
-  onReplaceData: (data: ResumeData) => void;
+  onReplaceData: (data: ResumeData, beforeScore?: number, afterScore?: number) => void;
   onResetBlank: () => void;
   onResetSample: () => void;
   isCloudSynced?: boolean;
-  uid?: string | undefined;
+  uid?: string;
 }
 
 export function BuilderToolbar({
@@ -72,15 +71,9 @@ export function BuilderToolbar({
   const importRef = useRef<HTMLInputElement>(null);
   const [readyModalOpen, setReadyModalOpen] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
-  const [optimizerOpen, setOptimizerOpen] = useState(false);
+  const [tailorModalOpen, setTailorModalOpen] = useState(false);
 
   const completion = calculateResumeCompletion(data);
-
-  const { ExportSurface, download, exporting } = useResumeExport(
-    data,
-    style,
-    title || data.personal.fullName || "resume",
-  );
 
   async function handleImport(file: File | undefined) {
     if (!file) return;
@@ -94,18 +87,12 @@ export function BuilderToolbar({
     }
   }
 
-  async function handleDownload(format: ExportFormat) {
-    try {
-      await download(format);
-      setTimeout(() => {
-        setReadyModalOpen(true);
-      }, 300);
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Couldn't generate the download. Please try again.",
-      );
-    }
-  }
+  const handleDownload = () => {
+    printResume(style.pageSize);
+    setTimeout(() => {
+      setReadyModalOpen(true);
+    }, 400);
+  };
 
   return (
     <>
@@ -152,10 +139,8 @@ export function BuilderToolbar({
           </div>
         </div>
 
-        {/* Center: Save status & Completion score — hidden on the smallest
-            screens since the title, undo/redo, and download controls
-            already compete for space there. */}
-        <div className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground">
+        {/* Center: Save status & Completion score */}
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <div className="flex items-center gap-1">
             {status === "saving" ? (
               <>
@@ -171,7 +156,7 @@ export function BuilderToolbar({
 
           <div className="h-3 w-px bg-border hidden md:block" />
 
-          {/* Real Completion percentage */}
+          {/* Completion percentage */}
           <div className="hidden md:flex items-center gap-1.5">
             <div className="h-2 w-16 rounded-full bg-secondary overflow-hidden">
               <div
@@ -187,6 +172,19 @@ export function BuilderToolbar({
 
         {/* Right: Actions */}
         <div className="flex flex-wrap items-center gap-1.5">
+          {/* AI Tailor for Job Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setTailorModalOpen(true)}
+            className="gap-1.5 text-xs font-semibold border-primary/40 bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-all shadow-sm"
+          >
+            <Wand2 className="size-3.5" />
+            <span>Tailor for Job</span>
+          </Button>
+
+          <div className="mx-0.5 h-5 w-px bg-border" />
+
           <Button
             variant="ghost"
             size="icon"
@@ -206,17 +204,6 @@ export function BuilderToolbar({
             aria-label="Redo"
           >
             <Redo2 className="size-4" />
-          </Button>
-
-          <div className="mx-1 h-5 w-px bg-border hidden sm:block" />
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 text-xs border-primary/40 text-primary hover:bg-primary/10 hover:text-primary"
-            onClick={() => setOptimizerOpen(true)}
-          >
-            <Sparkles className="size-3.5" /> Optimize
           </Button>
 
           <div className="mx-1 h-5 w-px bg-border hidden sm:block" />
@@ -284,25 +271,32 @@ export function BuilderToolbar({
             </Link>
           </Button>
 
-          <DownloadMenu onDownload={handleDownload} exporting={exporting} size="compact" />
+          <Button
+            variant="hero"
+            size="sm"
+            className="gap-1.5 font-semibold shadow-[var(--shadow-glow)]"
+            onClick={handleDownload}
+          >
+            <Download className="size-3.5" /> Download PDF
+          </Button>
         </div>
       </div>
 
-      <ExportSurface />
+      <ResumeTailoringDialog
+        open={tailorModalOpen}
+        onOpenChange={setTailorModalOpen}
+        resumeData={data}
+        uid={uid}
+        onApply={(updated, before, after) => {
+          onReplaceData(updated, before, after);
+        }}
+      />
 
       <ResumeReadyModal
         open={readyModalOpen}
         onOpenChange={setReadyModalOpen}
         pageSize={style.pageSize}
         resumeTitle={title}
-      />
-
-      <ResumeOptimizerDialog
-        open={optimizerOpen}
-        onOpenChange={setOptimizerOpen}
-        uid={uid}
-        resumeData={data}
-        onApply={onReplaceData}
       />
     </>
   );

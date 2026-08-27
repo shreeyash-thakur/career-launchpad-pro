@@ -15,7 +15,6 @@ import {
   Zap,
   Layout,
   ExternalLink,
-  UploadCloud,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,16 +44,9 @@ interface Props {
   onRefresh: () => void;
   onCreateNew: () => void;
   onNavigateTab: (tab: string) => void;
-  onUploadResume: () => void;
 }
 
-export function DashboardOverview({
-  resumes,
-  onRefresh,
-  onCreateNew,
-  onNavigateTab,
-  onUploadResume,
-}: Props) {
+export function DashboardOverview({ resumes, onRefresh, onCreateNew, onNavigateTab }: Props) {
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -145,20 +137,14 @@ export function DashboardOverview({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
-          <Button onClick={onUploadResume} variant="outline" size="lg" className="gap-2">
-            <UploadCloud className="size-5" />
-            Upload Resume
-          </Button>
-          <Button
-            onClick={onCreateNew}
-            size="lg"
-            className="bg-[image:var(--gradient-emerald)] text-primary-foreground font-semibold shadow-[var(--shadow-glow)] hover:brightness-110 hover:-translate-y-0.5 transition-all gap-2"
-          >
-            <Plus className="size-5" />
-            Create New Resume
-          </Button>
-        </div>
+        <Button
+          onClick={onCreateNew}
+          size="lg"
+          className="bg-[image:var(--gradient-emerald)] text-primary-foreground font-semibold shadow-[var(--shadow-glow)] hover:brightness-110 hover:-translate-y-0.5 transition-all gap-2 shrink-0 self-start sm:self-auto"
+        >
+          <Plus className="size-5" />
+          Create New Resume
+        </Button>
       </div>
 
       {/* Recent Resumes Section */}
@@ -192,19 +178,13 @@ export function DashboardOverview({
               Build your first professional resume in minutes with guided questions and ATS
               templates.
             </p>
-            <div className="mt-5 flex items-center gap-2">
-              <Button onClick={onUploadResume} variant="outline" className="gap-2 text-xs">
-                <UploadCloud className="size-4" />
-                Upload Existing Resume
-              </Button>
-              <Button
-                onClick={onCreateNew}
-                className="bg-[image:var(--gradient-emerald)] text-primary-foreground font-semibold shadow-[var(--shadow-glow)] gap-2 text-xs"
-              >
-                <Plus className="size-4" />
-                Create My Resume
-              </Button>
-            </div>
+            <Button
+              onClick={onCreateNew}
+              className="mt-5 bg-[image:var(--gradient-emerald)] text-primary-foreground font-semibold shadow-[var(--shadow-glow)] gap-2 text-xs"
+            >
+              <Plus className="size-4" />
+              Create My Resume
+            </Button>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

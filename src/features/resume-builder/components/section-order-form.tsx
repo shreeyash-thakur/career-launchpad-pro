@@ -18,15 +18,17 @@ import type { ResumeData, SectionKind } from "../types";
 import { moveItem } from "../utils/array";
 import { isSectionHidden, sectionHasContent, sectionLabel } from "../templates/shared";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronUp, Eye, EyeOff, GripVertical } from "lucide-react";
+import { ChevronDown, ChevronUp, Eye, EyeOff, GripVertical, Sparkles, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface Props {
   data: ResumeData;
   onChange: (updater: (prev: ResumeData) => ResumeData) => void;
+  fresherMode?: boolean;
 }
 
-export function SectionOrderForm({ data, onChange }: Props) {
+export function SectionOrderForm({ data, onChange, fresherMode }: Props) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -56,8 +58,39 @@ export function SectionOrderForm({ data, onChange }: Props) {
     });
   }
 
+  function applyFresherOrder() {
+    onChange((prev) => {
+      const preferred: SectionKind[] = ["summary", "education", "projects", "skills", "experience", "certifications", "languages"];
+      const customOnes = prev.sectionOrder.filter((k) => !preferred.includes(k));
+      const newOrder = [...preferred.filter((k) => prev.sectionOrder.includes(k)), ...customOnes];
+      return { ...prev, sectionOrder: newOrder };
+    });
+    toast.success("Applied recommended fresher section order (Education & Projects prioritized)");
+  }
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
+      {fresherMode && (
+        <div className="rounded-xl border border-primary/30 bg-primary/10 p-3 text-xs space-y-2">
+          <div className="flex items-center gap-2 font-semibold text-primary">
+            <GraduationCap className="size-4 shrink-0" />
+            <span>Fresher Order Recommendation</span>
+          </div>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            Recruiters hiring graduates expect to see Education and Academic/Personal Projects before work experience.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={applyFresherOrder}
+            className="w-full gap-1.5 text-xs font-semibold bg-background hover:bg-primary/10"
+          >
+            <Sparkles className="size-3 text-primary" /> Apply Recommended Fresher Order
+          </Button>
+        </div>
+      )}
+
       <p className="text-xs text-muted-foreground">
         Drag to reorder, or use the arrows. The header and contact info always stay on top. Hide a
         section to remove it from the résumé without losing its content — unhide any time.

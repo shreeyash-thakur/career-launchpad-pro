@@ -10,15 +10,14 @@ import {
   Check,
   LayoutGrid,
   Award,
+  GraduationCap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn, stripUndefined } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { TEMPLATES, getTemplate } from "@/features/resume-builder/templates";
 import { useAuth } from "@/context/auth-context";
 import { ResumeService } from "@/lib/resume-service";
 import type { TemplateMeta } from "@/features/resume-builder/types";
-
-// ─── Types ──────────────────────────────────────────────────────────────────
 
 interface Option {
   value: string;
@@ -33,13 +32,11 @@ interface Step {
   options: Option[];
 }
 
-// ─── Steps definition ────────────────────────────────────────────────────────
-
-const STEPS: Step[] = [
+const BASE_STEPS: Step[] = [
   {
     id: "experience",
     question: "What best describes your career stage?",
-    subtitle: "We'll recommend the best resume structure for your experience level.",
+    subtitle: "We'll recommend the best resume structure and guidance for your experience level.",
     options: [
       { value: "student", label: "Student / Fresh Graduate", icon: "🎓" },
       { value: "entry", label: "Entry-Level (0–2 years)", icon: "🌱" },
@@ -85,7 +82,17 @@ const STEPS: Step[] = [
   },
 ];
 
-// ─── Multi-Template Recommendation Logic ────────────────────────────────────
+const FRESHER_STEP: Step = {
+  id: "prioritize",
+  question: "What would you like to prioritize at the top of your resume?",
+  subtitle: "We'll automatically organize your sections to showcase your biggest academic & personal strengths.",
+  options: [
+    { value: "education", label: "Education & GPA First", icon: "🎓" },
+    { value: "projects", label: "Key Projects & Hackathons First", icon: "💻" },
+    { value: "skills", label: "Core Technical Skills First", icon: "⚡" },
+    { value: "internships", label: "Internships & Practical Training First", icon: "🌟" },
+  ],
+};
 
 type Answers = Record<string, string>;
 
@@ -174,7 +181,6 @@ function getRecommendedTemplates(answers: Answers): (TemplateMeta & { reason: st
     });
   }
 
-  // Map to full template meta
   return list.map((item) => {
     const meta = getTemplate(item.id);
     return {
@@ -183,8 +189,6 @@ function getRecommendedTemplates(answers: Answers): (TemplateMeta & { reason: st
     };
   });
 }
-
-// ─── Option Card ─────────────────────────────────────────────────────────────
 
 function OptionCard({
   option,
@@ -218,8 +222,6 @@ function OptionCard({
   );
 }
 
-// ─── Main Wizard ─────────────────────────────────────────────────────────────
-
 export function OnboardingWizard() {
   const navigate = useNavigate();
   const search = useSearch({ from: "/onboarding" }) as {
@@ -237,7 +239,6 @@ export function OnboardingWizard() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("modern");
   const [finishing, setFinishing] = useState(false);
 
-  // Check if existing resume already completed questionnaire
   useEffect(() => {
     async function checkExisting() {
       if (resumeId && user?.uid) {
@@ -255,8 +256,12 @@ export function OnboardingWizard() {
     void checkExisting();
   }, [resumeId, user?.uid, navigate]);
 
-  const total = STEPS.length;
-  const current = STEPS[step];
+  // Dynamically include the Fresher Step if experience is student or entry
+  const isFresher = answers["experience"] === "student" || answers["experience"] === "entry";
+  const activeSteps = isFresher ? [...BASE_STEPS, FRESHER_STEP] : BASE_STEPS;
+
+  const total = activeSteps.length;
+  const current = activeSteps[step];
   const progress = showTemplatesSelection ? 100 : ((step + 1) / (total + 1)) * 100;
   const selectedValue = current ? answers[current.id] : undefined;
   const canProceed = Boolean(selectedValue);
@@ -267,7 +272,6 @@ export function OnboardingWizard() {
       setDirection(1);
       setStep((s) => s + 1);
     } else {
-      // Show templates recommendation screen
       setShowTemplatesSelection(true);
       const recommended = getRecommendedTemplates(answers);
       if (recommended.length > 0) {
@@ -303,24 +307,26 @@ export function OnboardingWizard() {
 
     if (user?.uid) {
       if (resumeId) {
-        // Update existing resume
         try {
           await ResumeService.updateResume(resumeId, user.uid, {
             templateId,
             questionnaireCompleted: true,
             questionnaireAnswers: answers,
+            fresherMode: isFresher,
+            sectionPriority: answers["prioritize"] || (isFresher ? "education" : undefined),
           });
         } catch (err) {
           console.warn("Failed to update resume questionnaire:", err);
         }
       } else {
-        // Create new resume in Firestore for authenticated user
         try {
           const created = await ResumeService.createResume(user.uid, {
             templateId,
             title: `${answers["industry"] ? answers["industry"].charAt(0).toUpperCase() + answers["industry"].slice(1) : "Professional"} Resume`,
             questionnaireCompleted: true,
             questionnaireAnswers: answers,
+            fresherMode: isFresher,
+            sectionPriority: answers["prioritize"] || (isFresher ? "education" : undefined),
           });
           targetResumeId = created.id;
         } catch (err) {
@@ -332,11 +338,11 @@ export function OnboardingWizard() {
     setTimeout(() => {
       void navigate({
         to: "/builder",
-        search: stripUndefined({
+        search: {
           resumeId: targetResumeId,
           template: templateId,
           fromOnboarding: "1",
-        }),
+        },
       });
     }, 400);
   };
@@ -358,7 +364,7 @@ export function OnboardingWizard() {
         <div className="flex items-center justify-between mb-2 text-xs text-muted-foreground">
           <span>
             {showTemplatesSelection
-              ? "Step 5 of 5: Select Template"
+              ? `Step ${total + 1} of ${total + 1}: Select Template`
               : `Step ${step + 1} of ${total + 1}`}
           </span>
           <span>{Math.round(progress)}% complete</span>
@@ -386,6 +392,11 @@ export function OnboardingWizard() {
               transition={{ type: "spring", stiffness: 380, damping: 34 }}
             >
               <div className="mb-6 text-center">
+                {current.id === "prioritize" && (
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary mb-2">
+                    <GraduationCap className="size-3.5" /> Fresher Optimization
+                  </div>
+                )}
                 <h1 className="font-display text-2xl font-semibold leading-tight sm:text-3xl">
                   {current.question}
                 </h1>

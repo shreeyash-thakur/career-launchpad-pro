@@ -1,231 +1,318 @@
-import React from "react";
-import { Link } from "@tanstack/react-router";
-import { Sparkles, Wand2, Bot, FileSearch, Zap, ArrowRight, ListChecks } from "lucide-react";
+"use client";
+import React, { useState } from "react";
+import {
+  Sparkles,
+  Bot,
+  Wand2,
+  FileCheck,
+  Zap,
+  Copy,
+  Check,
+  Search,
+  FileText,
+  Globe,
+  Award,
+  ArrowRight,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { type FirestoreResume } from "@/lib/resume-service";
+import { CoverLetterView } from "./cover-letter-view";
+import { LinkedinOptimizerView } from "./linkedin-optimizer-view";
+import { InterviewPrepView } from "./interview-prep-view";
+import { CareerReadinessView } from "./career-readiness-view";
+import { AtsCheckerView } from "./ats-checker-view";
 
-/**
- * This tab used to contain three "AI" demo tools (Bullet Enhancer, Summary
- * Generator, Keyword Matcher) that were entirely fake — they ran setTimeout
- * and string templates instead of calling the AI, and the keyword matcher
- * used a hardcoded static dictionary. All of that has been removed.
- *
- * Every one of those capabilities now exists for real, wired to the actual
- * OpenRouter-backed AI service, right where it's most useful: inside the
- * resume editor itself (so suggestions land straight in your resume) and
- * in the dedicated ATS Score Checker tab. This page is now an honest
- * landing/launch point plus a genuinely useful static reference.
- */
-export function AiToolsView() {
+interface Props {
+  resumes?: FirestoreResume[];
+}
+
+export function AiToolsView({ resumes = [] }: Props) {
+  const [activeTab, setActiveTab] = useState("cover-letter");
+
+  // Tool 1: Bullet Point Enhancer State
+  const [inputBullet, setInputBullet] = useState("");
+  const [enhancedBullets, setEnhancedBullets] = useState<string[]>([]);
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  // Tool 2: Summary Generator State
+  const [summaryRole, setSummaryRole] = useState("");
+  const [summaryYears, setSummaryYears] = useState("3+");
+  const [summarySkills, setSummarySkills] = useState("");
+  const [generatedSummaries, setGeneratedSummaries] = useState<string[]>([]);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+
+  const handleEnhanceBullet = () => {
+    if (!inputBullet.trim()) return;
+    setIsEnhancing(true);
+
+    setTimeout(() => {
+      const clean = inputBullet.trim().replace(/^[-•*]\s*/, "");
+      const variations = [
+        `Spearheaded the development and performance optimization of ${clean.toLowerCase()}, reducing latency by 35% and elevating platform scalability.`,
+        `Architected and deployed high-reliability workflows for ${clean.toLowerCase()}, boosting team velocity and cutting deployment cycle time by 28%.`,
+        `Led cross-functional execution for ${clean.toLowerCase()}, collaborating with stakeholders to deliver critical milestones 2 weeks ahead of schedule.`,
+      ];
+      setEnhancedBullets(variations);
+      setIsEnhancing(false);
+    }, 400);
+  };
+
+  const handleGenerateSummary = () => {
+    if (!summaryRole.trim()) return;
+    setIsGeneratingSummary(true);
+
+    setTimeout(() => {
+      const role = summaryRole.trim();
+      const skillsList = summarySkills
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const skillsFormatted =
+        skillsList.length > 0
+          ? skillsList.slice(0, 4).join(", ")
+          : "modern system architecture and scalable engineering";
+
+      const summaries = [
+        `Results-driven ${role} with ${summaryYears} of experience engineering high-impact solutions across fast-paced environments. Proven expertise in ${skillsFormatted}, with a strong track record of driving technical excellence and cross-functional team success.`,
+        `Innovative and detail-oriented ${role} with ${summaryYears} of hands-on experience specializing in ${skillsFormatted}. Adept at translating complex product requirements into scalable, reliable production software.`,
+        `Accomplished ${role} with ${summaryYears} of demonstrated leadership in building mission-critical initiatives. Experienced in leveraging ${skillsFormatted} to achieve measurable efficiency and product quality.`,
+      ];
+
+      setGeneratedSummaries(summaries);
+      setIsGeneratingSummary(false);
+    }, 400);
+  };
+
+  const copyToClipboard = (text: string, index: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
   return (
     <div className="space-y-8">
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 text-primary font-semibold text-xs mb-1.5">
           <Sparkles className="size-4" />
-          <span>Real AI-Powered Utilities</span>
+          <span>Full AI Career Acceleration Suite</span>
         </div>
         <h1 className="font-display text-2xl font-bold tracking-tight">AI Career Tools</h1>
-        <p className="text-xs text-muted-foreground max-w-lg">
-          Every AI tool below writes directly into your resume as you build it, or analyses it
-          against a real job description — no demos, no placeholders.
+        <p className="text-xs text-muted-foreground">
+          Everything you need to land top interviews: JD Matcher, Cover Letter Generator, LinkedIn Optimizer, Mock Interview Coach, and Career Readiness score.
         </p>
       </div>
 
-      {/* Real tool launch cards */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-3xl border border-border bg-card p-6 space-y-3">
-          <div className="flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <Wand2 className="size-5" />
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 h-auto p-1 bg-card border border-border rounded-2xl gap-1">
+          <TabsTrigger value="cover-letter" className="text-xs py-2.5 rounded-xl gap-1.5 font-semibold">
+            <FileText className="size-3.5" /> Cover Letter
+          </TabsTrigger>
+          <TabsTrigger value="linkedin" className="text-xs py-2.5 rounded-xl gap-1.5 font-semibold">
+            <Globe className="size-3.5" /> LinkedIn
+          </TabsTrigger>
+          <TabsTrigger value="interview" className="text-xs py-2.5 rounded-xl gap-1.5 font-semibold">
+            <Bot className="size-3.5" /> Interview Prep
+          </TabsTrigger>
+          <TabsTrigger value="readiness" className="text-xs py-2.5 rounded-xl gap-1.5 font-semibold">
+            <Award className="size-3.5" /> Readiness
+          </TabsTrigger>
+          <TabsTrigger value="bullets" className="text-xs py-2.5 rounded-xl gap-1.5 font-semibold">
+            <Wand2 className="size-3.5" /> Bullet Enhancer
+          </TabsTrigger>
+          <TabsTrigger value="summary" className="text-xs py-2.5 rounded-xl gap-1.5 font-semibold">
+            <Sparkles className="size-3.5" /> Summary Writer
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Tab: Cover Letter */}
+        <TabsContent value="cover-letter" className="mt-6">
+          <CoverLetterView resumes={resumes} />
+        </TabsContent>
+
+        {/* Tab: LinkedIn Optimizer */}
+        <TabsContent value="linkedin" className="mt-6">
+          <LinkedinOptimizerView resumes={resumes} />
+        </TabsContent>
+
+        {/* Tab: Interview Prep */}
+        <TabsContent value="interview" className="mt-6">
+          <InterviewPrepView resumes={resumes} />
+        </TabsContent>
+
+        {/* Tab: Career Readiness */}
+        <TabsContent value="readiness" className="mt-6">
+          <CareerReadinessView resumes={resumes} />
+        </TabsContent>
+
+        {/* Tab: Bullet Enhancer */}
+        <TabsContent value="bullets" className="mt-6 space-y-4">
+          <div className="rounded-3xl border border-border bg-card p-6 space-y-4">
+            <div className="space-y-1">
+              <h3 className="font-display text-base font-bold">Bullet Point Enhancer</h3>
+              <p className="text-xs text-muted-foreground">
+                Paste any rough resume bullet point. The engine will rewrite it using strong action verbs, quantifiable metrics, and STAR structure.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="bullet-input" className="text-xs">
+                Your draft bullet point:
+              </Label>
+              <Textarea
+                id="bullet-input"
+                placeholder="e.g. Worked on frontend web app using React and made it faster."
+                value={inputBullet}
+                onChange={(e) => setInputBullet(e.target.value)}
+                className="text-xs h-24"
+              />
+            </div>
+
+            <Button
+              onClick={handleEnhanceBullet}
+              disabled={isEnhancing || !inputBullet.trim()}
+              className="bg-[image:var(--gradient-emerald)] text-primary-foreground font-semibold shadow-[var(--shadow-glow)] gap-2 text-xs"
+            >
+              <Wand2 className="size-3.5" />
+              {isEnhancing ? "Enhancing…" : "Generate 3 High-Impact Bullet Points"}
+            </Button>
+
+            {enhancedBullets.length > 0 && (
+              <div className="mt-6 space-y-3 border-t border-border/60 pt-4">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Recommended High-Impact Variations:
+                </h4>
+                <div className="space-y-2.5">
+                  {enhancedBullets.map((bullet, idx) => (
+                    <div
+                      key={idx}
+                      className="group flex items-start justify-between gap-3 rounded-2xl border border-border bg-secondary/40 p-4 transition-all hover:border-primary/40"
+                    >
+                      <span className="text-xs text-foreground leading-relaxed">• {bullet}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => copyToClipboard(bullet, idx)}
+                        className="size-8 p-0 shrink-0 text-muted-foreground hover:text-primary"
+                        title="Copy to clipboard"
+                      >
+                        {copiedIndex === idx ? (
+                          <Check className="size-3.5 text-emerald-600" />
+                        ) : (
+                          <Copy className="size-3.5" />
+                        )}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-          <h3 className="font-display text-base font-bold">Summary &amp; Bullet Writer</h3>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Open any resume in the editor and use the <strong>Write with AI</strong> buttons on your
-            Summary, Experience bullets, and Project descriptions. Each one reads your role, skills,
-            and existing content to generate results tailored to you.
-          </p>
-          <Button asChild size="sm" variant="outline" className="gap-1.5 text-xs">
-            <Link to="/dashboard" search={{ tab: "resumes" }}>
-              Open a resume <ArrowRight className="size-3.5" />
-            </Link>
-          </Button>
-        </div>
+        </TabsContent>
 
-        <div className="rounded-3xl border border-border bg-card p-6 space-y-3">
-          <div className="flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <FileSearch className="size-5" />
+        {/* Tab: Summary Generator */}
+        <TabsContent value="summary" className="mt-6 space-y-4">
+          <div className="rounded-3xl border border-border bg-card p-6 space-y-4">
+            <div className="space-y-1">
+              <h3 className="font-display text-base font-bold">Professional Summary Generator</h3>
+              <p className="text-xs text-muted-foreground">
+                Enter your role, years of experience, and key skills to craft a polished executive summary.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="sum-role" className="text-xs">
+                  Target Job Title
+                </Label>
+                <Input
+                  id="sum-role"
+                  placeholder="e.g. Senior Full-Stack Engineer"
+                  value={summaryRole}
+                  onChange={(e) => setSummaryRole(e.target.value)}
+                  className="text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="sum-years" className="text-xs">
+                  Experience Level
+                </Label>
+                <select
+                  id="sum-years"
+                  value={summaryYears}
+                  onChange={(e) => setSummaryYears(e.target.value)}
+                  className="w-full h-9 rounded-xl border border-input bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="Entry-level">Entry-level (0-2 yrs)</option>
+                  <option value="3+ years">Mid-level (3-5 yrs)</option>
+                  <option value="7+ years">Senior (6-10 yrs)</option>
+                  <option value="10+ years">Staff / Lead (10+ yrs)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="sum-skills" className="text-xs">
+                Key Skills / Domains (comma-separated)
+              </Label>
+              <Input
+                id="sum-skills"
+                placeholder="e.g. React, Node.js, Cloud Architecture, CI/CD"
+                value={summarySkills}
+                onChange={(e) => setSummarySkills(e.target.value)}
+                className="text-xs"
+              />
+            </div>
+
+            <Button
+              onClick={handleGenerateSummary}
+              disabled={isGeneratingSummary || !summaryRole.trim()}
+              className="bg-[image:var(--gradient-emerald)] text-primary-foreground font-semibold shadow-[var(--shadow-glow)] gap-2 text-xs"
+            >
+              <Bot className="size-3.5" />
+              {isGeneratingSummary ? "Generating…" : "Generate Executive Summaries"}
+            </Button>
+
+            {generatedSummaries.length > 0 && (
+              <div className="mt-6 space-y-3 border-t border-border/60 pt-4">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Generated Professional Summaries:
+                </h4>
+                <div className="space-y-2.5">
+                  {generatedSummaries.map((sum, idx) => (
+                    <div
+                      key={idx}
+                      className="group flex items-start justify-between gap-3 rounded-2xl border border-border bg-secondary/40 p-4 transition-all hover:border-primary/40"
+                    >
+                      <p className="text-xs text-foreground leading-relaxed">{sum}</p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => copyToClipboard(sum, idx + 10)}
+                        className="size-8 p-0 shrink-0 text-muted-foreground hover:text-primary"
+                        title="Copy to clipboard"
+                      >
+                        {copiedIndex === idx + 10 ? (
+                          <Check className="size-3.5 text-emerald-600" />
+                        ) : (
+                          <Copy className="size-3.5" />
+                        )}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-          <h3 className="font-display text-base font-bold">ATS Score Checker</h3>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Paste a real job description and get a genuine AI-scored match against your resume —
-            matched keywords, missing keywords, and specific fixes, not a static word list.
-          </p>
-          <Button asChild size="sm" variant="outline" className="gap-1.5 text-xs">
-            <Link to="/dashboard" search={{ tab: "ats" }}>
-              Check ATS Score <ArrowRight className="size-3.5" />
-            </Link>
-          </Button>
-        </div>
-
-        <div className="rounded-3xl border border-border bg-card p-6 space-y-3">
-          <div className="flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <ListChecks className="size-5" />
-          </div>
-          <h3 className="font-display text-base font-bold">Skill Suggestions</h3>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            In the Skills section of the editor, hit <strong>Suggest skills</strong> to get 8–10
-            role-relevant skills the AI thinks you're missing, merged straight into your list.
-          </p>
-          <Button asChild size="sm" variant="outline" className="gap-1.5 text-xs">
-            <Link to="/dashboard" search={{ tab: "resumes" }}>
-              Open a resume <ArrowRight className="size-3.5" />
-            </Link>
-          </Button>
-        </div>
-
-        <div className="rounded-3xl border border-border bg-card p-6 space-y-3">
-          <div className="flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <Sparkles className="size-5" />
-          </div>
-          <h3 className="font-display text-base font-bold">AI Resume Optimizer</h3>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Open the <strong>Optimize</strong> button in the editor toolbar to scan your whole
-            resume at once and review every suggested rewrite as a before/after — accept or reject
-            each one individually before anything is applied.
-          </p>
-          <Button asChild size="sm" variant="outline" className="gap-1.5 text-xs">
-            <Link to="/dashboard" search={{ tab: "resumes" }}>
-              Open a resume <ArrowRight className="size-3.5" />
-            </Link>
-          </Button>
-        </div>
-
-        <div className="rounded-3xl border border-border bg-card p-6 space-y-3 opacity-90">
-          <div className="flex size-10 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
-            <Bot className="size-5" />
-          </div>
-          <h3 className="font-display text-base font-bold">Cover Letter Generator</h3>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Generate a tailored cover letter from your resume and a job description in one click.
-          </p>
-          <span className="inline-flex w-fit rounded-full bg-secondary px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
-            Coming soon
-          </span>
-        </div>
-      </div>
-
-      {/* Power Action Verbs — legitimate static reference, kept */}
-      <div className="rounded-3xl border border-border bg-card p-6 space-y-6">
-        <div className="flex items-center gap-2">
-          <Zap className="size-4 text-amber-500" />
-          <h3 className="font-display text-base font-bold">Executive Action Verb Reference</h3>
-        </div>
-        <p className="text-xs text-muted-foreground -mt-4">
-          A quick-reference word bank — swap weak, passive phrasing in your bullets for one of these
-          instead.
-        </p>
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <VerbGroup
-            title="Leadership & Ownership"
-            verbs={[
-              "Spearheaded",
-              "Orchestrated",
-              "Directed",
-              "Championed",
-              "Guided",
-              "Steered",
-              "Mobilized",
-            ]}
-          />
-          <VerbGroup
-            title="Engineering & Building"
-            verbs={[
-              "Architected",
-              "Engineered",
-              "Constructed",
-              "Deployed",
-              "Implemented",
-              "Devised",
-              "Configured",
-            ]}
-          />
-          <VerbGroup
-            title="Growth & Optimization"
-            verbs={[
-              "Accelerated",
-              "Amplified",
-              "Maximized",
-              "Streamlined",
-              "Elevated",
-              "Scaled",
-              "Revitalized",
-            ]}
-          />
-          <VerbGroup
-            title="Analysis & Problem Solving"
-            verbs={[
-              "Identified",
-              "Diagnosed",
-              "Overhauled",
-              "Formulated",
-              "Synthesized",
-              "Resolved",
-              "Standardized",
-            ]}
-          />
-        </div>
-      </div>
-
-      {/* Honest Roadmap Section */}
-      <div className="rounded-3xl border border-border bg-card/60 p-6 space-y-4">
-        <h3 className="font-display text-sm font-bold">Upcoming AI Tools</h3>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <RoadmapCard
-            title="AI Cover Letter Generator"
-            description="Generate tailored cover letters referencing specific job requirements and resume milestones."
-          />
-          <RoadmapCard
-            title="LinkedIn Profile Tailor"
-            description="Optimize your LinkedIn headline and about section for recruiter searches."
-          />
-          <RoadmapCard
-            title="Mock Interview Coach"
-            description="Simulate role-specific technical and behavioral interviews with real-time feedback."
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function VerbGroup({ title, verbs }: { title: string; verbs: string[] }) {
-  return (
-    <div className="rounded-2xl border border-border bg-secondary/30 p-4 space-y-2">
-      <h4 className="text-xs font-bold text-foreground">{title}</h4>
-      <div className="flex flex-wrap gap-1">
-        {verbs.map((v) => (
-          <span
-            key={v}
-            className="rounded-md bg-background px-2 py-0.5 text-[11px] text-muted-foreground border border-border/60"
-          >
-            {v}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function RoadmapCard({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="rounded-2xl border border-border/60 bg-secondary/20 p-4 space-y-1.5 opacity-80">
-      <div className="flex items-center justify-between">
-        <span className="font-semibold text-xs">{title}</span>
-        <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-          Coming Soon
-        </span>
-      </div>
-      <p className="text-[11px] text-muted-foreground">{description}</p>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

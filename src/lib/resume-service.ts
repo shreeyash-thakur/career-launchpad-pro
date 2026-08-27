@@ -24,6 +24,8 @@ export interface FirestoreResume {
   questionnaireCompleted: boolean;
   questionnaireVersion: number;
   questionnaireAnswers?: Record<string, string>;
+  fresherMode?: boolean;
+  sectionPriority?: string;
   createdAt: any;
   updatedAt: any;
 }
@@ -75,6 +77,8 @@ export async function listUserResumes(uid: string): Promise<FirestoreResume[]> {
           questionnaireCompleted: Boolean(d["questionnaireCompleted"]),
           questionnaireVersion: d["questionnaireVersion"] || 1,
           questionnaireAnswers: d["questionnaireAnswers"] || {},
+          fresherMode: Boolean(d["fresherMode"]),
+          sectionPriority: d["sectionPriority"] || undefined,
           createdAt: d["createdAt"]?.toMillis ? d["createdAt"].toMillis() : (typeof d["createdAt"] === "number" ? d["createdAt"] : Date.now()),
           updatedAt: d["updatedAt"]?.toMillis ? d["updatedAt"].toMillis() : (typeof d["updatedAt"] === "number" ? d["updatedAt"] : Date.now()),
         };
@@ -178,6 +182,8 @@ export async function createResume(
     questionnaireCompleted: initial?.questionnaireCompleted ?? false,
     questionnaireVersion: 1,
     questionnaireAnswers: initial?.questionnaireAnswers || {},
+    fresherMode: initial?.fresherMode ?? false,
+    sectionPriority: initial?.sectionPriority || undefined,
     createdAt: now,
     updatedAt: now,
   };

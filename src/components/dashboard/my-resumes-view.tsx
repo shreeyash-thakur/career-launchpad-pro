@@ -13,7 +13,6 @@ import {
   FileText,
   Layout,
   CheckCircle2,
-  FileSearch,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,10 +41,9 @@ interface Props {
   resumes: FirestoreResume[];
   onRefresh: () => void;
   onCreateNew: () => void;
-  onNavigateToAts?: (resumeId: string) => void;
 }
 
-export function MyResumesView({ resumes, onRefresh, onCreateNew, onNavigateToAts }: Props) {
+export function MyResumesView({ resumes, onRefresh, onCreateNew }: Props) {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<"recent" | "title" | "completion">("recent");
@@ -259,14 +257,6 @@ export function MyResumesView({ resumes, onRefresh, onCreateNew, onNavigateToAts
                         >
                           <Copy className="size-3.5" /> Duplicate
                         </DropdownMenuItem>
-                        {onNavigateToAts && (
-                          <DropdownMenuItem
-                            onClick={() => onNavigateToAts(resume.id)}
-                            className="gap-2 text-xs"
-                          >
-                            <FileSearch className="size-3.5" /> ATS Score
-                          </DropdownMenuItem>
-                        )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onClick={() => handleOpenDelete(resume)}

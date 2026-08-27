@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
-import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, Loader2, LayoutDashboard, Plus } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fadeUp, revealOnce, stagger } from "@/animations/variants";
 import { useAuth } from "@/contexts/AuthContext";
@@ -12,24 +12,6 @@ export function CtaBanner() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
-
-  function handleCreateNew() {
-    if (loading || !user) return;
-    setCreating(true);
-    void createResume(user.uid)
-      .then((resume) => {
-        void navigate({
-          to: "/onboarding",
-          search: { resumeId: resume.id },
-        });
-      })
-      .catch((err) => {
-        console.error("Failed to create resume:", err);
-        toast.error("Couldn't create a new resume. Please try again.");
-        setCreating(false);
-      });
-  }
-
   return (
     <section className="px-4 pb-10">
       <motion.div
@@ -48,66 +30,47 @@ export function CtaBanner() {
           variants={fadeUp}
           className="relative text-balance text-3xl font-semibold sm:text-5xl"
         >
-          {loading ? (
-            <span className="inline-block h-9 w-72 max-w-full animate-pulse rounded-xl bg-secondary align-middle" aria-hidden />
-          ) : user ? (
-            "Ready to keep building?"
-          ) : (
-            "Your next role deserves a better first impression."
-          )}
+          Your next role deserves a better first impression.
         </motion.h2>
         <motion.p variants={fadeUp} className="relative max-w-xl text-muted-foreground">
-          {loading ? (
-            <span className="inline-block h-5 w-80 max-w-full animate-pulse rounded-lg bg-secondary align-middle" aria-hidden />
-          ) : user ? (
-            "Jump back into your resumes, or start a fresh one for your next application."
-          ) : (
-            "Start with a template, make it yours, export in a click. Free to begin, no card needed."
-          )}
+          Start with a template, make it yours, export in a click. Free to begin, no card needed.
         </motion.p>
         <motion.div variants={fadeUp} className="relative flex flex-wrap justify-center gap-3">
-          {loading ? (
-            <div className="flex flex-wrap justify-center gap-3" aria-hidden>
-              <div className="h-[52px] w-52 animate-pulse rounded-2xl bg-secondary" />
-              <div className="h-[52px] w-44 animate-pulse rounded-2xl bg-secondary" />
-            </div>
-          ) : user ? (
-            <>
-              <Button variant="hero" size="xl" className="gap-2" asChild>
-                <Link to="/dashboard">
-                  <LayoutDashboard className="size-4" />
-                  Go to My Dashboard
-                  <ArrowRight />
-                </Link>
-              </Button>
-              <Button
-                variant="glass"
-                size="xl"
-                className="gap-2"
-                disabled={creating}
-                onClick={handleCreateNew}
-              >
-                {creating ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-                {creating ? "Creating…" : "Create New Resume"}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                variant="hero"
-                size="xl"
-                asChild
-              >
-                <Link to="/onboarding">
-                  Create My Resume
-                  <ArrowRight />
-                </Link>
-              </Button>
-              <Button variant="glass" size="xl">
-                Talk to us
-              </Button>
-            </>
-          )}
+          <Button
+            variant="hero"
+            size="xl"
+            disabled={loading || creating}
+            onClick={() => {
+              if (loading) return;
+              if (user) {
+                setCreating(true);
+                void createResume(user.uid)
+                  .then((resume) => {
+                    void navigate({
+                      to: "/resumes/$resumeId/questionnaire",
+                      params: { resumeId: resume.id },
+                    });
+                  })
+                  .catch((err) => {
+                    console.error("Failed to create resume:", err);
+                    toast.error("Couldn't create a new resume. Please try again.");
+                    setCreating(false);
+                  });
+              } else {
+                void navigate({
+                  to: "/login",
+                  search: { redirect: "/resumes" },
+                });
+              }
+            }}
+          >
+            {creating ? <Loader2 className="size-4 animate-spin" /> : null}
+            {creating ? "Creating…" : "Create My Resume"}
+            {!creating && <ArrowRight />}
+          </Button>
+          <Button variant="glass" size="xl">
+            Talk to us
+          </Button>
         </motion.div>
       </motion.div>
     </section>

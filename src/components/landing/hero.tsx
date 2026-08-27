@@ -1,7 +1,7 @@
 import { motion, useScroll, useTransform } from "motion/react";
 import { useRef } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, FileText, Star, Sparkles, Plus, LayoutDashboard } from "lucide-react";
+import { ArrowRight, FileText, Star, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fadeUp, stagger } from "@/animations/variants";
 import { HeroScene } from "@/components/landing/hero-scene";
@@ -15,7 +15,7 @@ export function Hero() {
   const copyY = useTransform(scrollYProgress, [0, 1], [0, 60]);
   const copyOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
 
-  const { user, loading, openAuthModal } = useAuth();
+  const { user, openAuthModal } = useAuth();
   const navigate = useNavigate();
 
   const handleCreateMyResume = () => {
@@ -46,27 +46,12 @@ export function Hero() {
             variants={fadeUp}
             className="glass inline-flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-4 text-xs"
           >
-            {loading ? (
-              <span className="h-5 w-56 animate-pulse rounded-full bg-secondary" aria-hidden />
-            ) : user ? (
-              <>
-                <span className="rounded-full bg-[image:var(--gradient-emerald)] px-2.5 py-1 font-semibold text-primary-foreground">
-                  Welcome back
-                </span>
-                <span className="text-muted-foreground">
-                  {user.displayName ? `Good to see you, ${user.displayName.split(" ")[0]}` : "Pick up where you left off"}
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="rounded-full bg-[image:var(--gradient-gold)] px-2.5 py-1 font-semibold text-gold-foreground">
-                  Free &amp; ATS-Ready
-                </span>
-                <span className="text-muted-foreground">
-                  20+ original templates, print-accurate vector PDF
-                </span>
-              </>
-            )}
+            <span className="rounded-full bg-[image:var(--gradient-gold)] px-2.5 py-1 font-semibold text-gold-foreground">
+              Free &amp; ATS-Ready
+            </span>
+            <span className="text-muted-foreground">
+              20+ original templates, print-accurate vector PDF
+            </span>
           </motion.div>
 
           <motion.h1
@@ -86,51 +71,21 @@ export function Hero() {
           </motion.p>
 
           <motion.div variants={fadeUp} className="flex flex-wrap items-center gap-3">
-            {loading ? (
-              <div className="flex flex-wrap items-center gap-3" aria-hidden>
-                <div className="h-[52px] w-52 animate-pulse rounded-2xl bg-secondary" />
-                <div className="h-[52px] w-48 animate-pulse rounded-2xl bg-secondary" />
-              </div>
-            ) : user ? (
-              <>
-                <Button
-                  variant="hero"
-                  size="xl"
-                  asChild
-                  className="gap-2 font-semibold shadow-[var(--shadow-glow)]"
-                >
-                  <Link to="/dashboard">
-                    <LayoutDashboard className="size-4" />
-                    Go to My Dashboard
-                    <ArrowRight />
-                  </Link>
-                </Button>
-                <Button variant="glass" size="xl" asChild>
-                  <Link to="/onboarding">
-                    <Plus />
-                    Create New Resume
-                  </Link>
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  variant="hero"
-                  size="xl"
-                  onClick={handleCreateMyResume}
-                  className="gap-2 font-semibold shadow-[var(--shadow-glow)]"
-                >
-                  Create My Resume
-                  <ArrowRight />
-                </Button>
-                <Button variant="glass" size="xl" asChild>
-                  <a href="#templates">
-                    <FileText />
-                    Browse templates
-                  </a>
-                </Button>
-              </>
-            )}
+            <Button
+              variant="hero"
+              size="xl"
+              onClick={handleCreateMyResume}
+              className="gap-2 font-semibold shadow-[var(--shadow-glow)]"
+            >
+              Create My Resume
+              <ArrowRight />
+            </Button>
+            <Button variant="glass" size="xl" asChild>
+              <a href="#templates">
+                <FileText />
+                Browse templates
+              </a>
+            </Button>
           </motion.div>
 
           <motion.div

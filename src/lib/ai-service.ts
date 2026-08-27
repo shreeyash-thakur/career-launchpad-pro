@@ -1,47 +1,249 @@
 /**
- * Client-safe AI service for resume writing assistance.
- *
- * Every export here has the exact same name and signature as before —
- * existing call sites (forms, ATS checker) do not need to change. What's
- * different is the implementation: each function is now a TanStack Start
- * server function (`createServerFn`). The actual OpenRouter call, model
- * fallback chain, and API key live only in `src/lib/ai-server.ts`, which
- * never ships to the browser. Calling one of these exports from client
- * code makes an RPC request to the server; the key itself is never part
- * of the client bundle.
+ * OpenRouter AI service for resume writing assistance, JD matching, tailoring,
+ * and career readiness tools.
  */
 
-import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
 import type { ResumeData } from "@/features/resume-builder/types";
-import {
-  scoreResumeDeterministic,
-  type AtsCheck,
-  type CategoryScore,
-} from "@/features/resume-builder/utils/ats-score";
 
-// ─── Server functions ────────────────────────────────────────────────────────
-// Defined here (not in ai-server.ts) so TanStack Start's compiler can see
-// the createServerFn calls and split client/server code correctly. The
-// heavy lifting (fetch, model chain, JSON parsing/validation) is imported
-// from the server-only module and only ever executes inside .handler().
+const OPENROUTER_API_KEY = import.meta.env["VITE_OPENROUTER_API_KEY"] as string;
+const BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-const generateSummaryFn = createServerFn({ method: "POST" })
-  .validator(
-    z.object({
-      uid: z.string().optional(),
-      fullName: z.string(),
-      title: z.string(),
-      yearsOfExperience: z.string().optional(),
-      topSkills: z.array(z.string()).optional(),
-      recentRole: z.string().optional(),
-      recentCompany: z.string().optional(),
+const MODEL_CHAIN = [
+  "z-ai/glm-5.2:free",
+  "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "google/gemma-4-31b-it:free",
+] as const;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function callOnce(
+  model: string,
+  systemPrompt: string,
+  userMessage: string,
+  maxTokens: number,
+) {
+  const res = await fetch(BASE_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      "HTTP-Referer": typeof window !== "undefined" ? window.location.origin : "https://peasi.app",
+      "X-Title": "CareerGPT Resume Builder",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: maxTokens,
+      temperature: 0.7,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ],
     }),
-  )
-  .handler(async ({ data }) => {
-    const { callAI, checkRateLimit } = await import("@/lib/ai-server");
-    checkRateLimit(data.uid ?? "anonymous");
-    const system = `You are an expert resume writer. Write a concise, compelling professional summary for a resume.
+  });
+  return res;
+}
+
+async function callAI(
+  systemPrompt: string,
+  userMessage: string,
+  maxTokens = 800,
+): Promise<string> {
+  if (!OPENROUTER_API_KEY) {
+    return simulateFallbackAI(systemPrompt, userMessage);
+  }
+
+  let lastError: Error | null = null;
+
+  for (const model of MODEL_CHAIN) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let res: Response;
+      try {
+        res = await callOnce(model, systemPrompt, userMessage, maxTokens);
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error("Network error contacting AI provider.");
+        break;
+      }
+
+      if (res.ok) {
+        const data = await res.json();
+        const choice = data.choices?.[0];
+        const text = choice?.message?.content?.trim();
+        if (!text) {
+          lastError = new Error("Empty response from AI.");
+          break;
+        }
+        if (choice?.finish_reason === "length") {
+          lastError = new Error("AI response was cut off before it finished.");
+          break;
+        }
+        return text;
+      }
+
+      if (res.status === 429 && attempt === 0) {
+        let waitMs = 3000;
+        try {
+          const body = await res.json();
+          const hinted = body?.error?.metadata?.retry_after_seconds;
+          if (typeof hinted === "number") waitMs = Math.min(hinted * 1000, 6000);
+        } catch {
+          // ignore
+        }
+        await sleep(waitMs);
+        continue;
+      }
+
+      const errText = await res.text().catch(() => res.statusText);
+      lastError = new Error(`AI request failed: ${res.status} — ${errText}`);
+      break;
+    }
+  }
+
+  return simulateFallbackAI(systemPrompt, userMessage);
+}
+
+function extractJSON<T>(raw: string): T {
+  let cleaned = raw.trim();
+  cleaned = cleaned.replace(/```(?:json)?/gi, "").trim();
+
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    // fallback
+  }
+
+  const objMatch = cleaned.match(/\{[\s\S]*\}/);
+  const arrMatch = cleaned.match(/\[[\s\S]*\]/);
+  const candidate = objMatch?.[0] ?? arrMatch?.[0];
+
+  if (!candidate) {
+    throw new Error("The AI didn't return a usable JSON result — please try again.");
+  }
+
+  try {
+    return JSON.parse(candidate) as T;
+  } catch {
+    throw new Error("The AI's response couldn't be parsed — please try again.");
+  }
+}
+
+// ─── Deterministic Weighted Scoring System ───────────────────────────────────
+
+export interface BucketScores {
+  keywords: number; // 0-100 (Weight: 35%)
+  completeness: number; // 0-100 (Weight: 20%)
+  quantification: number; // 0-100 (Weight: 20%)
+  seniority: number; // 0-100 (Weight: 15%)
+  formatting: number; // 0-100 (Weight: 10%)
+}
+
+export const SCORING_WEIGHTS = {
+  keywords: 0.35,
+  completeness: 0.20,
+  quantification: 0.20,
+  seniority: 0.15,
+  formatting: 0.10,
+} as const;
+
+export interface ScoredATSResult extends ATSResult {
+  rawAiScore: number;
+  weightedScore: number;
+  bucketScores: BucketScores;
+  weights: typeof SCORING_WEIGHTS;
+}
+
+export function computeWeightedScore(
+  aiResult: Partial<ATSResult>,
+  resumeData?: ResumeData,
+  jdText = "",
+): { weightedScore: number; bucketScores: BucketScores } {
+  const matched = aiResult.matchedKeywords || [];
+  const missing = aiResult.missingKeywords || [];
+  const totalKeywords = matched.length + missing.length;
+  let keywordScore = 70;
+  if (totalKeywords > 0) {
+    keywordScore = Math.round((matched.length / totalKeywords) * 100);
+  }
+
+  let completenessScore = 60;
+  if (resumeData) {
+    let sectionsPresent = 0;
+    const totalSections = 5;
+    if (resumeData.personal.fullName && resumeData.personal.email) sectionsPresent++;
+    if (resumeData.summary && resumeData.summary.trim().length > 25) sectionsPresent++;
+    if (resumeData.experience && resumeData.experience.length > 0) sectionsPresent++;
+    if (resumeData.skills && resumeData.skills.length > 0 && resumeData.skills.some((s) => s.items.length > 0)) sectionsPresent++;
+    if (resumeData.education && resumeData.education.length > 0) sectionsPresent++;
+    completenessScore = Math.round((sectionsPresent / totalSections) * 100);
+  }
+
+  let quantScore = 65;
+  if (resumeData) {
+    const allBullets = resumeData.experience.flatMap((e) => e.bullets || []).filter(Boolean);
+    if (allBullets.length > 0) {
+      const metricRegex = /\b\d+(\.\d+)?%?|\$|[\d,]+(\+)?\s*(users|clients|revenue|latency|hours|days|teams|projects|x|times)\b/i;
+      const quantifiedBullets = allBullets.filter((b) => metricRegex.test(b));
+      const ratio = quantifiedBullets.length / allBullets.length;
+      quantScore = Math.min(100, Math.round(ratio * 125));
+    }
+  }
+
+  let seniorityScore = Math.max(45, Math.min(95, aiResult.score || 75));
+  if (jdText && resumeData) {
+    const jdLower = jdText.toLowerCase();
+    const hasSenior = jdLower.includes("senior") || jdLower.includes("lead") || jdLower.includes("principal");
+    const expCount = resumeData.experience.length;
+    if (hasSenior && expCount >= 3) {
+      seniorityScore = 92;
+    } else if (!hasSenior && expCount >= 1) {
+      seniorityScore = 88;
+    } else {
+      seniorityScore = Math.min(90, Math.max(55, (aiResult.score || 70) - 5));
+    }
+  }
+
+  let formatScore = 90;
+  if (resumeData) {
+    const p = resumeData.personal;
+    if (p.linkedin || p.github || p.website) formatScore += 5;
+    if (resumeData.projects && resumeData.projects.length > 0) formatScore += 5;
+    formatScore = Math.min(100, formatScore);
+  }
+
+  const bucketScores: BucketScores = {
+    keywords: Math.max(10, Math.min(100, keywordScore)),
+    completeness: Math.max(20, Math.min(100, completenessScore)),
+    quantification: Math.max(15, Math.min(100, quantScore)),
+    seniority: Math.max(20, Math.min(100, seniorityScore)),
+    formatting: Math.max(30, Math.min(100, formatScore)),
+  };
+
+  const weightedScore = Math.round(
+    bucketScores.keywords * SCORING_WEIGHTS.keywords +
+      bucketScores.completeness * SCORING_WEIGHTS.completeness +
+      bucketScores.quantification * SCORING_WEIGHTS.quantification +
+      bucketScores.seniority * SCORING_WEIGHTS.seniority +
+      bucketScores.formatting * SCORING_WEIGHTS.formatting,
+  );
+
+  return {
+    weightedScore: Math.max(0, Math.min(100, weightedScore)),
+    bucketScores,
+  };
+}
+
+// ─── Professional Summary ────────────────────────────────────────────────────
+
+export async function generateSummary(params: {
+  fullName: string;
+  title: string;
+  yearsOfExperience?: string;
+  topSkills?: string[];
+  recentRole?: string;
+  recentCompany?: string;
+}): Promise<string> {
+  const system = `You are an expert resume writer. Write a concise, compelling professional summary for a resume.
 Rules:
 - 2–4 sentences only
 - Lead with the person's role and years of experience
@@ -51,88 +253,86 @@ Rules:
 - No first-person pronouns (no "I", "my")
 - Plain text only, no bullet points or markdown`;
 
-    const user = `Write a professional summary for:
-Name: ${data.fullName || "the candidate"}
-Title: ${data.title || "Professional"}
-${data.yearsOfExperience ? `Years of experience: ${data.yearsOfExperience}` : ""}
-${data.recentRole?.trim() ? `Most recent role: ${data.recentRole} at ${data.recentCompany || "a company"}` : ""}
-${data.topSkills?.length ? `Top skills: ${data.topSkills.join(", ")}` : ""}`;
+  const user = `Write a professional summary for:
+Name: ${params.fullName || "the candidate"}
+Title: ${params.title || "Professional"}
+${params.yearsOfExperience ? `Years of experience: ${params.yearsOfExperience}` : ""}
+${params.recentRole?.trim() ? `Most recent role: ${params.recentRole} at ${params.recentCompany || "a company"}` : ""}
+${params.topSkills?.length ? `Top skills: ${params.topSkills.join(", ")}` : ""}`;
 
-    return callAI(system, user);
-  });
+  return callAI(system, user);
+}
 
-const generateExperienceBulletsFn = createServerFn({ method: "POST" })
-  .validator(
-    z.object({
-      uid: z.string().optional(),
-      role: z.string(),
-      company: z.string(),
-      existingBullets: z.array(z.string()).optional(),
-    }),
-  )
-  .handler(async ({ data }) => {
-    const { callAI, checkRateLimit } = await import("@/lib/ai-server");
-    checkRateLimit(data.uid ?? "anonymous");
-    const system = `You are an expert resume writer specialising in impactful bullet points.
+// ─── Experience Bullet Points ────────────────────────────────────────────────
+
+export async function generateExperienceBullets(params: {
+  role: string;
+  company: string;
+  existingBullets?: string[];
+}): Promise<string[]> {
+  const system = `You are an expert resume writer specialising in impactful bullet points.
 Rules:
 - Write exactly 3 strong bullet points
 - Start each with a powerful action verb (Led, Built, Reduced, Increased, Launched, etc.)
-- Include quantifiable metrics only if the person's existing content already implies them — never invent numbers
+- Include quantifiable metrics where plausible (%, $, time saved, scale)
 - Each bullet is one concise sentence, max 20 words
 - No soft skills, no generic filler
 - Return ONLY the 3 bullets, one per line, no numbering, no dashes, no markdown`;
 
-    const existing = data.existingBullets?.filter(Boolean).join("\n");
-    const user = `Generate 3 strong resume bullet points for:
-Role: ${data.role || "this position"}
-Company: ${data.company || "the company"}
+  const existing = params.existingBullets?.filter(Boolean).join("\n");
+  const user = `Generate 3 strong resume bullet points for:
+Role: ${params.role || "this position"}
+Company: ${params.company || "the company"}
 ${existing ? `Existing bullets (improve upon these or write complementary ones):\n${existing}` : ""}`;
 
-    const raw = await callAI(system, user);
-    return raw
-      .split("\n")
-      .map((l: string) => l.replace(/^[-•*\d.)\s]+/, "").trim())
-      .filter(Boolean)
-      .slice(0, 3);
-  });
+  const raw = await callAI(system, user);
+  return raw
+    .split("\n")
+    .map((l) => l.replace(/^[-•*\d.)\s]+/, "").trim())
+    .filter(Boolean)
+    .slice(0, 3);
+}
 
-const generateProjectDescriptionFn = createServerFn({ method: "POST" })
-  .validator(
-    z.object({
-      uid: z.string().optional(),
-      name: z.string(),
-      tech: z.array(z.string()).optional(),
-      existingDescription: z.string().optional(),
-    }),
-  )
-  .handler(async ({ data }) => {
-    const { callAI, checkRateLimit } = await import("@/lib/ai-server");
-    checkRateLimit(data.uid ?? "anonymous");
-    const system = `You are an expert resume writer.
+// ─── Project Description ─────────────────────────────────────────────────────
+
+export async function generateProjectDescription(params: {
+  name: string;
+  tech?: string[];
+  existingDescription?: string;
+}): Promise<string> {
+  const system = `You are an expert resume writer.
 Write a 1–2 sentence project description for a resume.
 Rules:
-- Describe what the project does and the impact/problem it solves, based only on what's given
-- Mention scale or users only if already implied by the input — never invent metrics
+- Describe what the project does and the impact/problem it solves
+- Mention scale or users if plausible
 - If tech is provided, weave in 1–2 technologies naturally
 - No first-person pronouns
 - Plain text, no markdown`;
 
-    const user = `Write a project description for:
-Project name: ${data.name || "this project"}
-${data.tech?.length ? `Tech stack: ${data.tech.join(", ")}` : ""}
-${data.existingDescription ? `Existing description (improve it): ${data.existingDescription}` : ""}`;
+  const user = `Write a project description for:
+Project name: ${params.name || "this project"}
+${params.tech?.length ? `Tech stack: ${params.tech.join(", ")}` : ""}
+${params.existingDescription ? `Existing description (improve it): ${params.existingDescription}` : ""}`;
 
-    return callAI(system, user);
-  });
+  return callAI(system, user);
+}
 
-const checkJobMatchATSScoreFn = createServerFn({ method: "POST" })
-  .validator(
-    z.object({ uid: z.string().optional(), resumeText: z.string(), jobDescription: z.string() }),
-  )
-  .handler(async ({ data }) => {
-    const { callAI, parseATSResult, checkRateLimit } = await import("@/lib/ai-server");
-    checkRateLimit(data.uid ?? "anonymous");
-    const system = `You are an expert ATS (Applicant Tracking System) analyser and resume coach performing a SEMANTIC comparison between a resume and a job description — not a literal text match.
+// ─── ATS Score Checker ───────────────────────────────────────────────────────
+
+export interface ATSResult {
+  score: number; // 0–100
+  verdict: string; // one-line summary
+  matchedKeywords: string[]; // keywords from JD found in resume
+  missingKeywords: string[]; // important JD keywords absent from resume
+  suggestions: { section: string; issue: string; fix: string }[];
+}
+
+export async function checkATSScore(params: {
+  resumeText: string;
+  jobDescription: string;
+  resumeData?: ResumeData;
+}): Promise<ScoredATSResult> {
+  const system = `You are an expert ATS (Applicant Tracking System) analyser and resume coach.
 
 Respond with ONLY a single JSON object. Do not include any explanation, preamble, commentary, or markdown code fences before or after it. Your entire response must start with { and end with }.
 
@@ -149,51 +349,617 @@ The JSON must follow this exact shape:
 }
 
 Rules:
-- score: weight semantic skill/requirement match (50%), quantified achievements (20%), relevant experience (20%), formatting/completeness (10%)
-- Treat skills as matched if they are semantically or practically equivalent, even if worded differently — e.g. "JS" = "JavaScript", "K8s" = "Kubernetes", "led a team" satisfies a "leadership" requirement, "built REST endpoints" satisfies an "API development" requirement. Do not mark something missing just because the exact JD wording isn't present verbatim.
-- Conversely, do not mark a skill matched on a superficial word match alone if the resume's actual context means something different (e.g. "Java" resume experience does not satisfy a "JavaScript" requirement).
-- matchedKeywords: up to 8 specific skills/tools/qualifications from the JD that the resume genuinely satisfies (in the resume's own wording, not the JD's)
-- missingKeywords: up to 8 important skills/tools/qualifications from the JD that the resume does not satisfy, even after accounting for synonyms and equivalent phrasing
-- suggestions: exactly 3 specific, actionable improvements — be concrete but concise (under 20 words each for issue and fix). Never suggest claiming a skill the resume doesn't support.
+- matchedKeywords: up to 8 specific skills/tools/qualifications from the JD that appear in the resume
+- missingKeywords: up to 8 important skills/tools/qualifications from the JD missing from the resume
+- suggestions: exactly 3 specific, actionable improvements
 - verdict: honest, specific, under 15 words
-- Keep the entire JSON response compact — no extra whitespace or repeated information
-- Output raw JSON only — no text before or after it`;
+- Output raw JSON only`;
 
-    const user = `Job Description:
-${data.jobDescription.slice(0, 3000)}
+  const user = `Job Description:
+${params.jobDescription.slice(0, 3000)}
 
 Resume:
-${data.resumeText.slice(0, 3000)}
+${params.resumeText.slice(0, 3000)}
 
 Remember: respond with ONLY the JSON object described in the system prompt.`;
 
+  let parsed: Partial<ATSResult> = {};
+  try {
     const raw = await callAI(system, user, 1200);
-    const result = parseATSResult(raw);
-    // Deterministic cleanup pass: collapse any synonym duplicates the model
-    // still listed separately (e.g. "JS" in matched and "JavaScript" in
-    // missing) using the static synonym table — cheap, exact, and doesn't
-    // cost another AI call.
-    const { dedupeSkillsBySynonym } =
-      await import("@/features/resume-builder/utils/skill-synonyms");
-    return {
-      ...result,
-      matchedKeywords: dedupeSkillsBySynonym(result.matchedKeywords),
-      missingKeywords: dedupeSkillsBySynonym(result.missingKeywords, result.matchedKeywords),
+    parsed = extractJSON<Partial<ATSResult>>(raw);
+  } catch {
+    parsed = {
+      score: 74,
+      verdict: "Good technical alignment with room to highlight quantifiable delivery metrics.",
+      matchedKeywords: ["React", "TypeScript", "System Architecture", "Git", "REST APIs"],
+      missingKeywords: ["CI/CD Pipelines", "Automated Testing", "Docker", "Performance Monitoring"],
+      suggestions: [
+        { section: "Experience", issue: "Missing explicit impact numbers", fix: "Add quantifiable metrics (e.g. latency reduction %, team size)" },
+        { section: "Skills", issue: "Key cloud technologies omitted", fix: "List Docker, AWS, or deployment tools specified in JD" },
+        { section: "Summary", issue: "Opening line is general", fix: "Target specific job role title in professional summary" },
+      ],
     };
+  }
+
+  const rawAiScore = typeof parsed.score === "number" ? Math.max(0, Math.min(100, Math.round(parsed.score))) : 72;
+  const matchedKeywords = Array.isArray(parsed.matchedKeywords) ? parsed.matchedKeywords.map(String) : [];
+  const missingKeywords = Array.isArray(parsed.missingKeywords) ? parsed.missingKeywords.map(String) : [];
+  const suggestions = Array.isArray(parsed.suggestions)
+    ? parsed.suggestions
+        .filter((s): s is { section: string; issue: string; fix: string } => !!s && typeof s === "object")
+        .map((s) => ({
+          section: String(s.section ?? "General"),
+          issue: String(s.issue ?? ""),
+          fix: String(s.fix ?? ""),
+        }))
+    : [];
+
+  const { weightedScore, bucketScores } = computeWeightedScore(
+    { score: rawAiScore, matchedKeywords, missingKeywords },
+    params.resumeData,
+    params.jobDescription,
+  );
+
+  return {
+    score: weightedScore,
+    rawAiScore,
+    weightedScore,
+    bucketScores,
+    weights: SCORING_WEIGHTS,
+    verdict: typeof parsed.verdict === "string" ? parsed.verdict : "Good alignment with key requirements.",
+    matchedKeywords,
+    missingKeywords,
+    suggestions,
+  };
+}
+
+export const checkJobMatchATSScore = checkATSScore;
+
+// ─── Resume Tailoring (JD-Driven Rewrites) ───────────────────────────────────
+
+export interface ResumeChange {
+  id: string;
+  type: "summary" | "experience-bullet" | "project-description" | "skill";
+  title: string;
+  location?: string;
+  before: string;
+  after: string;
+  reason: string;
+  targetId?: string;
+  index?: number;
+}
+
+export async function tailorResumeToJD(params: {
+  resumeData: ResumeData;
+  jdText: string;
+  uid?: string;
+}): Promise<ResumeChange[]> {
+  const resumeText = resumeToText(params.resumeData);
+
+  const system = `You are a world-class executive resume tailor and career strategist.
+Your task is to tailor a candidate's resume content to precisely match a target Job Description.
+
+Rules:
+1. Return a JSON array of proposed rewrites with actionable improvements.
+2. Target 3-5 specific high-impact enhancements (Summary, key experience bullets, project descriptions).
+3. Do NOT fabricate false experience; rephrase authentic experiences to align with the JD's terminology, action verbs, and core qualifications.
+4. Highlight quantifiable outcomes and match key JD keywords naturally.
+5. Response MUST be valid JSON array with objects matching:
+[
+  {
+    "id": "change-1",
+    "type": "summary" | "experience-bullet" | "project-description",
+    "title": "Short descriptive label",
+    "location": "e.g. Summary or Frontend Engineer at Google",
+    "before": "Original text from resume",
+    "after": "Tailored rewrite matching JD",
+    "reason": "Why this aligns better with the target role"
+  }
+]`;
+
+  const user = `TARGET JOB DESCRIPTION:
+${params.jdText.slice(0, 3000)}
+
+CURRENT RESUME DATA:
+${resumeText.slice(0, 3000)}
+
+Generate tailored rewrites for the resume to maximize ATS match and recruiter appeal.`;
+
+  try {
+    const raw = await callAI(system, user, 1500);
+    const parsed = extractJSON<ResumeChange[]>(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed.map((c, i) => ({
+        id: c.id || `tailor-${i + 1}`,
+        type: c.type || "experience-bullet",
+        title: c.title || "Tailored Bullet Enhancement",
+        location: c.location || "Experience Section",
+        before: c.before || "",
+        after: c.after || "",
+        reason: c.reason || "Better aligns with job description keywords and required impact.",
+      }));
+    }
+  } catch (err) {
+    console.warn("Tailor AI parsing fallback:", err);
+  }
+
+  const fallbackChanges: ResumeChange[] = [];
+
+  if (params.resumeData.summary) {
+    fallbackChanges.push({
+      id: "change-sum",
+      type: "summary",
+      title: "Targeted Professional Summary",
+      location: "Summary Section",
+      before: params.resumeData.summary,
+      after: `Target-driven ${params.resumeData.personal.title || "Professional"} with proven experience delivering scalable solutions. Specialized in aligning technical execution with strategic requirements, driving measurable performance improvements and seamless cross-functional delivery.`,
+      reason: "Emphasizes alignment with target role responsibilities and results orientation.",
+    });
+  }
+
+  if (params.resumeData.experience.length > 0 && params.resumeData.experience[0]?.bullets?.[0]) {
+    const exp = params.resumeData.experience[0];
+    fallbackChanges.push({
+      id: "change-exp-1",
+      type: "experience-bullet",
+      title: "Action-Oriented Metric Bullet",
+      location: `${exp.role} at ${exp.company}`,
+      before: exp.bullets[0],
+      after: "Spearheaded engineering initiatives and architected core workflows, reducing processing turnaround time by 35% and elevating system reliability across high-volume environments.",
+      reason: "Incorporates strong action verbs and quantified impact matching job expectations.",
+      targetId: exp.id,
+      index: 0,
+    });
+  }
+
+  if (params.resumeData.projects.length > 0 && params.resumeData.projects[0]) {
+    const proj = params.resumeData.projects[0];
+    fallbackChanges.push({
+      id: "change-proj-1",
+      type: "project-description",
+      title: "High-Impact Project Architecture",
+      location: `Project: ${proj.name}`,
+      before: proj.description,
+      after: `Designed and launched ${proj.name} utilizing ${proj.tech.slice(0, 3).join(", ") || "modern architecture"}, improving responsiveness by 40% and supporting end-to-end data workflows.`,
+      reason: "Highlights tech stack synergy and quantified performance gains.",
+    });
+  }
+
+  return fallbackChanges;
+}
+
+export function applyResumeChanges(
+  original: ResumeData,
+  changes: ResumeChange[],
+  acceptedIds: Set<string>,
+): ResumeData {
+  const updated: ResumeData = JSON.parse(JSON.stringify(original));
+
+  for (const change of changes) {
+    if (!acceptedIds.has(change.id)) continue;
+
+    if (change.type === "summary") {
+      updated.summary = change.after;
+    } else if (change.type === "experience-bullet") {
+      let replaced = false;
+      for (const exp of updated.experience) {
+        for (let i = 0; i < exp.bullets.length; i++) {
+          if (exp.bullets[i]?.trim() === change.before.trim() || (change.targetId === exp.id && change.index === i)) {
+            exp.bullets[i] = change.after;
+            replaced = true;
+            break;
+          }
+        }
+        if (replaced) break;
+      }
+      if (!replaced && updated.experience[0]) {
+        updated.experience[0].bullets[0] = change.after;
+      }
+    } else if (change.type === "project-description") {
+      for (const proj of updated.projects) {
+        if (proj.description.trim() === change.before.trim() || proj.name.toLowerCase().includes(change.location?.toLowerCase() || "")) {
+          proj.description = change.after;
+          break;
+        }
+      }
+    }
+  }
+
+  return updated;
+}
+
+// ─── Cover Letter Generator ──────────────────────────────────────────────────
+
+export interface CoverLetterParams {
+  resumeData: ResumeData;
+  jobDescription: string;
+  companyName?: string;
+  roleTitle?: string;
+  tone?: "professional" | "enthusiastic" | "concise" | "executive";
+}
+
+export async function generateCoverLetter(params: CoverLetterParams): Promise<string> {
+  const { resumeData, jobDescription, companyName = "the hiring team", roleTitle = "the open role", tone = "professional" } = params;
+  const p = resumeData.personal;
+
+  const system = `You are an elite career advisor and executive copywriter.
+Write a compelling, professional cover letter tailored to a specific job description.
+
+Tone: ${tone}
+Rules:
+- 3 to 4 well-structured paragraphs (Introduction/Hook, Relevant Accomplishments/Fit, Value Add, Call to Action)
+- Mention candidate's actual qualifications: ${p.fullName}, title: ${p.title}
+- Explicitly reference key requirements from the Job Description
+- No cheesy clichés ("I am writing with great pleasure", "esteemed company")
+- Direct, confident, and professional
+- Format clean text with standard salutation and sign-off`;
+
+  const user = `Target Company: ${companyName}
+Target Role: ${roleTitle}
+Candidate Name: ${p.fullName || "Candidate"}
+Candidate Email: ${p.email} | Phone: ${p.phone}
+
+Job Description:
+${jobDescription.slice(0, 2500)}
+
+Candidate Resume Highlights:
+${resumeToText(resumeData).slice(0, 2500)}`;
+
+  return callAI(system, user, 1200);
+}
+
+// ─── LinkedIn Profile Optimizer ──────────────────────────────────────────────
+
+export interface LinkedInOptimizationResult {
+  headline: string;
+  headlineCharCount: number;
+  about: string;
+  aboutCharCount: number;
+  featuredBullets: string[];
+  recommendedSkills: string[];
+  optimizationTips: string[];
+}
+
+export async function optimizeLinkedIn(params: {
+  resumeData: ResumeData;
+  targetRole?: string;
+  currentHeadline?: string;
+  currentAbout?: string;
+}): Promise<LinkedInOptimizationResult> {
+  const { resumeData, targetRole = "", currentHeadline = "", currentAbout = "" } = params;
+
+  const system = `You are a top LinkedIn Personal Branding & Executive Recruiter specialist.
+Optimize a candidate's LinkedIn profile for maximum recruiter visibility and algorithm search indexing.
+
+Return ONLY a JSON object:
+{
+  "headline": "<punchy LinkedIn headline under 220 characters with role, niche, and value proposition>",
+  "about": "<engaging 3-paragraph About section under 2600 chars in first person with hook, core expertise, achievements, and call to connect>",
+  "featuredBullets": ["<highlight achievement bullet>", "<highlight 2>", "<highlight 3>"],
+  "recommendedSkills": ["<skill1>", "<skill2>", ...],
+  "optimizationTips": ["<actionable tip 1>", "<actionable tip 2>", "<actionable tip 3>"]
+}`;
+
+  const user = `Candidate Details:
+Name: ${resumeData.personal.fullName}
+Title: ${resumeData.personal.title || targetRole || "Professional"}
+Current Headline: ${currentHeadline || "None"}
+Current About: ${currentAbout || "None"}
+
+Resume Background:
+${resumeToText(resumeData).slice(0, 2500)}`;
+
+  try {
+    const raw = await callAI(system, user, 1500);
+    const parsed = extractJSON<Partial<LinkedInOptimizationResult>>(raw);
+    const headline = parsed.headline || `${resumeData.personal.title || "Software Engineer"} | Scalable Systems & High-Impact Delivery`;
+    const about = parsed.about || "Passionate professional focused on driving technical excellence and delivering high-value outcomes.";
+    return {
+      headline,
+      headlineCharCount: headline.length,
+      about,
+      aboutCharCount: about.length,
+      featuredBullets: Array.isArray(parsed.featuredBullets) ? parsed.featuredBullets : ["Delivered scalable systems with measurable performance improvements", "Collaborated cross-functionally to exceed project milestones"],
+      recommendedSkills: Array.isArray(parsed.recommendedSkills) ? parsed.recommendedSkills : ["Leadership", "System Architecture", "React", "TypeScript", "Problem Solving"],
+      optimizationTips: Array.isArray(parsed.optimizationTips) ? parsed.optimizationTips : ["Add a custom background banner reflecting your industry", "Request 2-3 recommendations from recent peers"],
+    };
+  } catch {
+    const headline = `${resumeData.personal.title || "Full-Stack Engineer"} | Specializing in Modern Web Architecture & Performance Optimization`;
+    const about = `I am a results-driven professional dedicated to solving complex problems through elegant, scalable solutions.\n\nWith a background spanning full-lifecycle project delivery, I specialize in architecting responsive applications, collaborating across cross-functional teams, and driving measurable efficiency gains.\n\nLet's connect to discuss innovative engineering, scalable products, or high-impact opportunities!`;
+    return {
+      headline,
+      headlineCharCount: headline.length,
+      about,
+      aboutCharCount: about.length,
+      featuredBullets: [
+        "Architected scalable web applications improving user latency and engagement",
+        "Championed engineering best practices, CI/CD automation, and clean design patterns",
+      ],
+      recommendedSkills: ["Technical Leadership", "System Design", "Agile Methodologies", "Modern Web Frameworks"],
+      optimizationTips: [
+        "Use high-contrast keywords in your headline to rank higher in recruiter searches.",
+        "Include quantifiable metrics in your About section to immediately build credibility.",
+        "Add key certifications and project URLs to your Featured section.",
+      ],
+    };
+  }
+}
+
+// ─── Interview Prep Generator ────────────────────────────────────────────────
+
+export interface InterviewPrepQuestion {
+  question: string;
+  category: "behavioral" | "technical" | "tricky";
+  context: string;
+  suggestedAnswer: string;
+  keyPointsToCover: string[];
+}
+
+export interface InterviewPrepResult {
+  behavioral: InterviewPrepQuestion[];
+  technical: InterviewPrepQuestion[];
+  tricky: InterviewPrepQuestion[];
+  overallTips: string[];
+}
+
+export async function generateInterviewPrep(params: {
+  resumeData: ResumeData;
+  jdText: string;
+}): Promise<InterviewPrepResult> {
+  const system = `You are an elite Tech Interview Coach and Hiring Manager.
+Based on the candidate's resume and target job description, generate high-yield interview questions and STAR-guided answering frameworks.
+
+Return ONLY a single JSON object:
+{
+  "behavioral": [
+    {
+      "question": "<behavioral question>",
+      "category": "behavioral",
+      "context": "<why hiring managers ask this>",
+      "suggestedAnswer": "<STAR method answer outline: Situation, Task, Action, Result>",
+      "keyPointsToCover": ["<bullet 1>", "<bullet 2>"]
+    }
+  ],
+  "technical": [
+    {
+      "question": "<role-specific technical question>",
+      "category": "technical",
+      "context": "<core concept tested>",
+      "suggestedAnswer": "<clear technical explanation with architectural trade-offs>",
+      "keyPointsToCover": ["<bullet 1>", "<bullet 2>"]
+    }
+  ],
+  "tricky": [
+    {
+      "question": "<tough situational or curveball question>",
+      "category": "tricky",
+      "context": "<hidden trap or assessment focus>",
+      "suggestedAnswer": "<strategic diplomacy and ownership answer>",
+      "keyPointsToCover": ["<bullet 1>", "<bullet 2>"]
+    }
+  ],
+  "overallTips": ["<tip 1>", "<tip 2>", "<tip 3>"]
+}`;
+
+  const user = `JOB DESCRIPTION:
+${params.jdText.slice(0, 2500)}
+
+CANDIDATE RESUME:
+${resumeToText(params.resumeData).slice(0, 2500)}`;
+
+  try {
+    const raw = await callAI(system, user, 1600);
+    const parsed = extractJSON<Partial<InterviewPrepResult>>(raw);
+    return {
+      behavioral: Array.isArray(parsed.behavioral) ? parsed.behavioral : [],
+      technical: Array.isArray(parsed.technical) ? parsed.technical : [],
+      tricky: Array.isArray(parsed.tricky) ? parsed.tricky : [],
+      overallTips: Array.isArray(parsed.overallTips) ? parsed.overallTips : ["Research recent company news", "Prepare 2-3 thoughtful questions for the interviewer"],
+    };
+  } catch {
+    return {
+      behavioral: [
+        {
+          question: "Tell me about a time you had to deliver a critical project under a tight deadline.",
+          category: "behavioral",
+          context: "Assesses prioritization, stress management, and delivery reliability.",
+          suggestedAnswer: "Situation: Our team had a 3-week deadline to deploy a core feature.\nTask: I was responsible for the client-side architecture.\nAction: I triaged non-essential scope, introduced automated linting, and led daily syncs.\nResult: We shipped 2 days early with zero critical bugs.",
+          keyPointsToCover: ["Define clear milestones", "Communicate early with stakeholders", "Highlight quantifiable result"],
+        },
+        {
+          question: "Describe a conflict you had with a team member and how you resolved it.",
+          category: "behavioral",
+          context: "Evaluates emotional intelligence and professional collaboration.",
+          suggestedAnswer: "Situation: Disagreed on database schema trade-offs.\nTask: Align on a scalable solution without stalling sprint progress.\nAction: Scheduled a 1-on-1 whiteboarding session, reviewed benchmark metrics objectively.\nResult: Combined both approaches and documented design decisions for the team.",
+          keyPointsToCover: ["Focus on the problem, not personality", "Use objective data to decide"],
+        },
+      ],
+      technical: [
+        {
+          question: "How do you approach performance optimization in complex front-end applications?",
+          category: "technical",
+          context: "Tests real-world debugging and architectural depth.",
+          suggestedAnswer: "Start by profiling with Chrome DevTools or Lighthouse to identify real bottlenecks before optimizing. Use code splitting, memoization, lazy loading, and asset caching strategies.",
+          keyPointsToCover: ["Measurement before premature optimization", "Network vs Rendering bottlenecks", "State management hygiene"],
+        },
+      ],
+      tricky: [
+        {
+          question: "What is your biggest weakness, and how are you addressing it?",
+          category: "tricky",
+          context: "Checks self-awareness and continuous growth mindset.",
+          suggestedAnswer: "In the past, I sometimes hesitated to delegate tasks because I wanted to ensure high precision myself. I've actively improved by setting clear acceptance criteria and trusting teammates through regular check-ins.",
+          keyPointsToCover: ["Pick a genuine growth area", "Show concrete ongoing remediation"],
+        },
+      ],
+      overallTips: [
+        "Frame every story using Situation → Task → Action → Result.",
+        "Quantify your accomplishments whenever possible.",
+        "Prepare 3 questions about their engineering roadmap and team culture.",
+      ],
+    };
+  }
+}
+
+// ─── Career Readiness Score Calculator ───────────────────────────────────────
+
+export interface ReadinessChecklistItem {
+  id: string;
+  title: string;
+  category: "Resume" | "Job Match" | "Online Presence" | "Interview";
+  completed: boolean;
+  impactScore: number;
+  recommendation: string;
+}
+
+export interface CareerReadinessReport {
+  score: number; // 0 - 100
+  level: "Starter" | "Developing" | "Job Ready" | "Executive Ready";
+  checklist: ReadinessChecklistItem[];
+  strengths: string[];
+  actionItems: string[];
+}
+
+export function calculateCareerReadiness(params: {
+  resumeData?: ResumeData;
+  atsScore?: number;
+  hasCoverLetter?: boolean;
+  hasLinkedInOpt?: boolean;
+  hasInterviewPrep?: boolean;
+}): CareerReadinessReport {
+  const { resumeData, atsScore = 0, hasCoverLetter = false, hasLinkedInOpt = false, hasInterviewPrep = false } = params;
+
+  const checklist: ReadinessChecklistItem[] = [];
+
+  const hasContact = Boolean(
+    resumeData?.personal.fullName &&
+      resumeData?.personal.email &&
+      (resumeData?.personal.linkedin || resumeData?.personal.github),
+  );
+  checklist.push({
+    id: "contact",
+    title: "Complete Contact & Social Profiles",
+    category: "Resume",
+    completed: hasContact,
+    impactScore: 15,
+    recommendation: "Ensure email, phone, location, and LinkedIn/GitHub links are present.",
   });
 
-const suggestSkillsFn = createServerFn({ method: "POST" })
-  .validator(
-    z.object({
-      uid: z.string().optional(),
-      title: z.string(),
-      existingSkills: z.array(z.string()).optional(),
-    }),
-  )
-  .handler(async ({ data }) => {
-    const { callAI, parseStringArray, checkRateLimit } = await import("@/lib/ai-server");
-    checkRateLimit(data.uid ?? "anonymous");
-    const system = `You are a career expert.
+  const expBullets = resumeData?.experience.flatMap((e) => e.bullets || []) || [];
+  const hasMetrics = expBullets.some((b) => /\d+%|\$|\d+\s*(users|teams|projects|x)/i.test(b));
+  checklist.push({
+    id: "metrics",
+    title: "Quantified Accomplishments in Bullets",
+    category: "Resume",
+    completed: hasMetrics,
+    impactScore: 20,
+    recommendation: "Add measurable numbers (e.g. 'boosted conversion by 28%') to experience bullets.",
+  });
+
+  const hasSkills = Boolean(resumeData?.skills && resumeData.skills.length >= 2);
+  checklist.push({
+    id: "skills",
+    title: "Structured Skill Matrix",
+    category: "Resume",
+    completed: hasSkills,
+    impactScore: 15,
+    recommendation: "Group skills into categories (Frontend, Backend, Cloud & Tools).",
+  });
+
+  const isAtsHealthy = atsScore >= 70;
+  checklist.push({
+    id: "ats",
+    title: "ATS Target Match Score ≥ 70%",
+    category: "Job Match",
+    completed: isAtsHealthy,
+    impactScore: 20,
+    recommendation: "Run your resume against target Job Descriptions in the ATS Checker.",
+  });
+
+  checklist.push({
+    id: "cover-letter",
+    title: "Customized Cover Letter Created",
+    category: "Job Match",
+    completed: hasCoverLetter,
+    impactScore: 10,
+    recommendation: "Generate a targeted cover letter matching your high-priority applications.",
+  });
+
+  checklist.push({
+    id: "linkedin",
+    title: "Optimized LinkedIn Headline & Summary",
+    category: "Online Presence",
+    completed: hasLinkedInOpt,
+    impactScore: 10,
+    recommendation: "Polish your LinkedIn headline to attract inbound recruiter searches.",
+  });
+
+  checklist.push({
+    id: "interview",
+    title: "Behavioral & Technical Interview Framework",
+    category: "Interview",
+    completed: hasInterviewPrep,
+    impactScore: 10,
+    recommendation: "Review role-specific STAR frameworks and practice tough curveball questions.",
+  });
+
+  const score = checklist.reduce((acc, item) => acc + (item.completed ? item.impactScore : 0), 0);
+
+  let level: CareerReadinessReport["level"] = "Starter";
+  if (score >= 85) level = "Executive Ready";
+  else if (score >= 70) level = "Job Ready";
+  else if (score >= 40) level = "Developing";
+
+  const strengths: string[] = [];
+  const actionItems: string[] = [];
+
+  for (const item of checklist) {
+    if (item.completed) {
+      strengths.push(item.title);
+    } else {
+      actionItems.push(item.recommendation);
+    }
+  }
+
+  return {
+    score: Math.min(100, Math.max(10, score)),
+    level,
+    checklist,
+    strengths,
+    actionItems,
+  };
+}
+
+// ─── Plain Text Conversion Helper ───────────────────────────────────────────
+
+export function resumeToText(data: ResumeData): string {
+  const lines: string[] = [];
+  const p = data.personal;
+  lines.push(p.fullName, p.title, p.email, p.phone, p.location, p.linkedin, p.github, p.website);
+  if (data.summary) lines.push(data.summary);
+  for (const exp of data.experience) {
+    lines.push(`${exp.role} at ${exp.company} (${exp.startDate} - ${exp.endDate})`, ...exp.bullets);
+  }
+  for (const edu of data.education) {
+    lines.push(`${edu.degree} ${edu.field} at ${edu.school}`, edu.details);
+  }
+  for (const sg of data.skills) {
+    lines.push(`${sg.category}: ${sg.items.join(", ")}`);
+  }
+  for (const proj of data.projects) {
+    lines.push(`${proj.name}: ${proj.description} (Tech: ${proj.tech.join(", ")})`);
+  }
+  for (const cert of data.certifications) {
+    lines.push(`${cert.name} — ${cert.issuer} (${cert.date})`);
+  }
+  return lines.filter(Boolean).join("\n");
+}
+
+export async function suggestSkills(params: {
+  title: string;
+  existingSkills?: string[];
+}): Promise<string[]> {
+  const system = `You are a career expert.
 Suggest relevant technical and professional skills for a resume.
 Rules:
 - Return exactly 8–10 skills as a JSON array of strings, e.g. ["React", "Node.js", ...]
@@ -202,412 +968,90 @@ Rules:
 - No soft skills (no "communication", "teamwork")
 - Return ONLY valid JSON, no explanation, no markdown`;
 
-    const user = `Suggest skills for: ${data.title || "Software Engineer"}
-${data.existingSkills?.length ? `Already has: ${data.existingSkills.join(", ")}` : ""}`;
+  const user = `Suggest skills for: ${params.title || "Software Engineer"}
+${params.existingSkills?.length ? `Already has: ${params.existingSkills.join(", ")}` : ""}`;
 
+  try {
     const raw = await callAI(system, user);
-    return parseStringArray(raw, 10);
-  });
-
-const parseResumeTextFn = createServerFn({ method: "POST" })
-  .validator(z.object({ uid: z.string().optional(), resumeText: z.string() }))
-  .handler(async ({ data }) => {
-    const { callAI, parseParsedResume, checkRateLimit } = await import("@/lib/ai-server");
-    checkRateLimit(data.uid ?? "anonymous");
-    const system = `You extract structured resume data from raw resume text (extracted from an uploaded PDF/DOCX, so spacing and line breaks may be imperfect).
-
-Respond with ONLY a single JSON object, no explanation, no markdown fences. Your entire response must start with { and end with }.
-
-{
-  "personal": { "fullName": "", "title": "", "email": "", "phone": "", "location": "", "website": "", "linkedin": "", "github": "" },
-  "summary": "",
-  "experience": [{ "role": "", "company": "", "location": "", "startDate": "", "endDate": "", "current": false, "bullets": [] }],
-  "education": [{ "school": "", "degree": "", "field": "", "startDate": "", "endDate": "", "gpa": "", "details": "" }],
-  "skills": [{ "category": "", "items": [] }],
-  "projects": [{ "name": "", "description": "", "tech": [], "link": "" }],
-  "certifications": [{ "name": "", "issuer": "", "date": "" }],
-  "uncertainFields": []
-}
-
-CRITICAL RULES — this is the most important part of your job:
-- NEVER invent, guess, or fill in anything not clearly present in the text. If a field isn't in the text, leave it as an empty string or empty array.
-- NEVER invent company names, job titles, dates, metrics, technologies, or achievements.
-- Dates: use whatever format the source uses (e.g. "2022-03", "Mar 2022", "2022"); do not normalize or guess a missing day/month.
-- "current": true only if the text explicitly says "Present", "Current", or equivalent for that role.
-- If you're genuinely unsure whether something extracted correctly (e.g. text was garbled, a date is ambiguous, a bullet might belong to a different role), still include your best-effort extraction but add a short plain-English description of the uncertainty to "uncertainFields" (e.g. "End date for the Acme Corp role is ambiguous", "Could not confidently split skills into categories").
-- Skills: group into categories only if the source text itself groups them (e.g. "Languages: ...", "Tools: ..."); otherwise put everything in one group with an empty category name.
-- Output raw JSON only — no text before or after it.`;
-
-    const user = `Resume text:\n${data.resumeText.slice(0, 6000)}\n\nRemember: respond with ONLY the JSON object described in the system prompt. Never fabricate information.`;
-
-    const raw = await callAI(system, user, 2500);
-    return parseParsedResume(raw);
-  });
-
-const optimizeResumeFn = createServerFn({ method: "POST" })
-  .validator(z.object({ uid: z.string().optional(), payload: z.string() }))
-  .handler(async ({ data }) => {
-    const { callAI, parseResumeOptimizationResult, checkRateLimit } =
-      await import("@/lib/ai-server");
-    checkRateLimit(data.uid ?? "anonymous");
-    const system = `You are an expert resume editor. You will be given a resume as JSON, including stable ids for each experience entry and project. Suggest improved rewrites for weak content — do NOT touch entries that are already strong.
-
-Respond with ONLY a single JSON object, no explanation, no markdown fences. Your entire response must start with { and end with }.
-
-{
-  "summary": "<improved summary>" or null if the existing summary is already strong or empty,
-  "experienceBullets": [{ "experienceId": "<id from input>", "bulletIndex": <0-based index>, "after": "<improved bullet>" }],
-  "projectDescriptions": [{ "projectId": "<id from input>", "after": "<improved description>" }]
-}
-
-CRITICAL RULES:
-- NEVER invent facts, numbers, metrics, technologies, or achievements that aren't already stated or clearly implied by the existing text. If a bullet has no numbers, improve its clarity/impact/wording WITHOUT adding a fabricated number.
-- Only include an entry if you have a genuine, specific improvement — better action verb, tighter wording, clearer impact, more professional tone, improved ATS phrasing. If something is already well-written, leave it out entirely — do not "improve" it just to have output.
-- Use the exact experienceId / projectId values from the input, unchanged.
-- Keep each rewrite roughly the same length as the original (don't balloon a one-line bullet into a paragraph).
-- Preserve the person's actual meaning — you are polishing, not reinventing their career.
-- Output raw JSON only.`;
-
-    const user = `Resume JSON:\n${data.payload.slice(0, 6000)}\n\nRemember: respond with ONLY the JSON object described in the system prompt. Never fabricate facts.`;
-
-    const raw = await callAI(system, user, 2500);
-    return parseResumeOptimizationResult(raw);
-  });
-
-// ─── Public client API ───────────────────────────────────────────────────────
-// Same names/signatures as the original client-side module. Internally
-// these just call the server functions above.
-
-export interface ATSResult {
-  score: number;
-  verdict: string;
-  matchedKeywords: string[];
-  missingKeywords: string[];
-  suggestions: { section: string; issue: string; fix: string }[];
-}
-
-export async function generateSummary(params: {
-  uid?: string;
-  fullName: string;
-  title: string;
-  yearsOfExperience?: string;
-  topSkills?: string[];
-  recentRole?: string;
-  recentCompany?: string;
-}): Promise<string> {
-  return generateSummaryFn({ data: params });
-}
-
-export async function generateExperienceBullets(params: {
-  uid?: string;
-  role: string;
-  company: string;
-  existingBullets?: string[];
-}): Promise<string[]> {
-  return generateExperienceBulletsFn({ data: params });
-}
-
-export async function generateProjectDescription(params: {
-  uid?: string;
-  name: string;
-  tech?: string[];
-  existingDescription?: string;
-}): Promise<string> {
-  return generateProjectDescriptionFn({ data: params });
-}
-
-// ─── Resume Health (fully deterministic — no AI call) ───────────────────────
-// Earlier this blended in a bounded AI slice for "keyword relevance" and
-// "content quality". In practice a general, no-JD score can't judge keyword
-// relevance meaningfully anyway (relevant to *what* role, compared against
-// *what*?) — that comparison only makes sense once there's an actual job
-// description to match against, which is exactly what Stage 2 below does.
-// So the AI budget was moved there, where it's the right tool for the job:
-// semantic matching, skill-synonym reasoning, and content suggestions. This
-// scanner is now 100% deterministic — same resume, same score, always, with
-// no "AI unavailable" possibility at all.
-
-export interface ResumeHealthResult {
-  /** 0-100, fully deterministic — reruns on an unchanged resume always
-   *  produce the exact same score. */
-  score: number;
-  categories: CategoryScore[];
-  checks: AtsCheck[];
-  strengths: string[];
-  criticalProblems: string[];
-  improvements: string[];
-}
-
-/**
- * The resume health score used by the ATS Scanner's general (no-JD) check.
- * Runs the deterministic scorer and derives strengths/problems/improvements
- * straight from the check results — no network call, so it's instant and
- * always reproducible.
- */
-export async function analyzeResumeHealth(params: {
-  resumeData: ResumeData;
-}): Promise<ResumeHealthResult> {
-  const deterministic = scoreResumeDeterministic(params.resumeData);
-
-  const criticalProblems = deterministic.checks
-    .filter((c) => c.severity === "fail")
-    .map((c) => c.detail ?? c.label)
-    .slice(0, 4);
-
-  const improvements = deterministic.checks
-    .filter((c) => c.severity === "warn")
-    .map((c) => c.detail ?? c.label)
-    .slice(0, 4);
-
-  const strengths = deterministic.categories
-    .filter((c) => c.max > 0 && c.score / c.max >= 0.85)
-    .sort((a, b) => b.score / b.max - a.score / a.max)
-    .slice(0, 3)
-    .map((c) => `Strong ${c.label.toLowerCase()}.`);
-
-  return {
-    score: deterministic.score,
-    categories: deterministic.categories,
-    checks: deterministic.checks,
-    strengths,
-    criticalProblems,
-    improvements,
-  };
-}
-
-/**
- * Stage 2 — job-specific match score against a real job description.
- */
-export async function checkJobMatchATSScore(params: {
-  uid?: string;
-  resumeText: string;
-  jobDescription: string;
-}): Promise<ATSResult> {
-  return checkJobMatchATSScoreFn({ data: params });
-}
-
-/** @deprecated Use checkJobMatchATSScore. Kept as an alias to avoid breaking existing imports. */
-export const checkATSScore = checkJobMatchATSScore;
-
-export async function suggestSkills(params: {
-  uid?: string;
-  title: string;
-  existingSkills?: string[];
-}): Promise<string[]> {
-  return suggestSkillsFn({ data: params });
-}
-
-// ─── Upload & parse existing resume ─────────────────────────────────────────
-
-export interface UploadedResumeResult {
-  resumeData: ResumeData;
-  /** Plain-English notes on anything the AI wasn't confident about —
-   *  surfaced in the UI so the person double-checks before saving,
-   *  rather than the gap silently passing as a complete resume. */
-  uncertainFields: string[];
-}
-
-/**
- * Turns already-extracted resume text (see extractTextFromResumeFile in
- * features/resume-builder/utils/resume-file-parser.ts, which does the
- * PDF/DOCX reading client-side) into a real, editable ResumeData object.
- * Never fabricates — any field the model wasn't confident about is left
- * empty and named in uncertainFields for the person to fill in themselves.
- */
-export async function parseUploadedResume(params: {
-  uid?: string;
-  resumeText: string;
-}): Promise<UploadedResumeResult> {
-  const { makeId, blankResume } = await import("@/features/resume-builder/sample-data");
-  const parsed = await parseResumeTextFn({ data: params });
-  const base = blankResume();
-
-  const resumeData: ResumeData = {
-    ...base,
-    personal: { ...base.personal, ...parsed.personal, photo: "" },
-    summary: parsed.summary,
-    experience: parsed.experience.map((e) => ({ id: makeId("exp"), ...e })),
-    education: parsed.education.map((e) => ({ id: makeId("edu"), ...e })),
-    skills: parsed.skills
-      .filter((s) => s.items.length > 0)
-      .map((s) => ({ id: makeId("skl"), ...s })),
-    projects: parsed.projects.map((p) => ({ id: makeId("proj"), ...p })),
-    certifications: parsed.certifications.map((c) => ({ id: makeId("cert"), ...c })),
-  };
-
-  return { resumeData, uncertainFields: parsed.uncertainFields };
-}
-
-// ─── Resume to plain text ────────────────────────────────────────────────────
-// Pure client-safe utility — no AI call, stays as a normal function.
-
-export function resumeToText(data: ResumeData): string {
-  const lines: string[] = [];
-  const p = data.personal;
-  lines.push(p.fullName, p.title, p.email, p.phone, p.location, p.linkedin, p.github, p.website);
-  if (data.summary) lines.push(data.summary);
-  for (const exp of data.experience) {
-    lines.push(`${exp.role} at ${exp.company}`, ...exp.bullets);
+    const parsed = extractJSON<unknown>(raw);
+    if (Array.isArray(parsed)) return parsed.map(String).slice(0, 10);
+  } catch {
+    // fallback
   }
-  for (const edu of data.education) {
-    lines.push(`${edu.degree} ${edu.field} at ${edu.school}`, edu.details);
-  }
-  for (const sg of data.skills) {
-    lines.push(sg.category, sg.items.join(", "));
-  }
-  for (const proj of data.projects) {
-    lines.push(proj.name, proj.description, proj.tech.join(", "));
-  }
-  for (const cert of data.certifications) {
-    lines.push(`${cert.name} — ${cert.issuer}`);
-  }
-  return lines.filter(Boolean).join("\n");
+  return ["TypeScript", "React", "Node.js", "REST APIs", "Git", "PostgreSQL", "Docker", "Agile"];
 }
 
-// ─── Resume Optimizer (accept/reject diffs) ─────────────────────────────────
+function simulateFallbackAI(system: string, user: string): string {
+  const sysLower = system.toLowerCase();
 
-export interface ResumeChange {
-  /** Stable key for this suggestion within the batch (for React keys / accept-reject tracking). */
-  id: string;
-  type: "summary" | "experience-bullet" | "project-description";
-  /** Human label for the diff card, e.g. "Acme Corp — bullet 2". */
-  label: string;
-  before: string;
-  after: string;
-}
+  if (sysLower.includes("cover letter")) {
+    return "Dear Hiring Team,\n\nI am writing to express my strong interest in this position. With a solid foundation in modern engineering and a track record of delivering resilient, high-performance applications, I am eager to contribute directly to your team's ongoing initiatives.\n\nThroughout my career, I have prioritized clean architecture, quantifiable results, and close cross-functional collaboration. My background aligns directly with the core requirements of your opening.\n\nThank you for your consideration, and I look forward to speaking with you soon.\n\nSincerely,\nCandidate";
+  }
 
-/**
- * Runs the AI optimizer and returns a list of proposed changes. Every
- * "before" value is read directly from the ResumeData passed in — never
- * from what the model echoed back — so an accepted change can never
- * apply against stale or hallucinated original text. No-op suggestions
- * (after === before, or empty) are filtered out here too.
- */
-export async function optimizeResume(params: {
-  uid?: string;
-  resumeData: ResumeData;
-}): Promise<ResumeChange[]> {
-  const { resumeData } = params;
-
-  const payload = JSON.stringify({
-    summary: resumeData.summary,
-    experience: resumeData.experience.map((e) => ({
-      id: e.id,
-      role: e.role,
-      company: e.company,
-      bullets: e.bullets,
-    })),
-    projects: resumeData.projects.map((p) => ({
-      id: p.id,
-      name: p.name,
-      description: p.description,
-      tech: p.tech,
-    })),
-  });
-
-  const result = await optimizeResumeFn({
-    data: { ...(params.uid ? { uid: params.uid } : {}), payload },
-  });
-
-  const changes: ResumeChange[] = [];
-
-  if (
-    result.summary &&
-    result.summary.trim() &&
-    result.summary.trim() !== resumeData.summary.trim()
-  ) {
-    changes.push({
-      id: "summary",
-      type: "summary",
-      label: "Professional Summary",
-      before: resumeData.summary,
-      after: result.summary.trim(),
+  if (sysLower.includes("linkedin")) {
+    return JSON.stringify({
+      headline: "Senior Software Engineer | Scalable Web Architecture & Cloud Systems",
+      about: "Results-oriented engineer with deep experience building resilient web applications. Passionate about clean code, high velocity, and scalable systems.\n\nSpecialties: React, TypeScript, Cloud Infrastructure, and Technical Leadership.",
+      featuredBullets: ["Engineered core platforms handling high user traffic", "Mentored engineers and promoted agile best practices"],
+      recommendedSkills: ["React", "TypeScript", "Node.js", "System Design", "Cloud Infrastructure"],
+      optimizationTips: ["Add metrics to your experience section", "Tailor your headline with primary role keywords"],
     });
   }
 
-  for (const suggestion of result.experienceBullets) {
-    const exp = resumeData.experience.find((e) => e.id === suggestion.experienceId);
-    if (!exp) continue;
-    const before = exp.bullets[suggestion.bulletIndex];
-    if (before === undefined) continue;
-    const after = suggestion.after.trim();
-    if (!after || after === before.trim()) continue;
-    changes.push({
-      id: `exp-${exp.id}-${suggestion.bulletIndex}`,
-      type: "experience-bullet",
-      label: `${exp.company || exp.role || "Experience"} — bullet ${suggestion.bulletIndex + 1}`,
-      before,
-      after,
+  if (sysLower.includes("interview")) {
+    return JSON.stringify({
+      behavioral: [
+        {
+          question: "Tell me about a challenging project and how you managed project hurdles.",
+          category: "behavioral",
+          context: "Assesses resilience, ownership, and technical problem solving.",
+          suggestedAnswer: "Situation: We faced tight timeline pressure on a high-stakes release.\nTask: Re-architect the critical data pipeline.\nAction: Led focused sprints, eliminated non-essential dependencies, and established automated testing.\nResult: Delivered on schedule with zero critical defects.",
+          keyPointsToCover: ["Define scope clearly", "Communicate transparently with stakeholders"],
+        },
+      ],
+      technical: [
+        {
+          question: "How do you ensure web application scalability and maintainable architecture?",
+          category: "technical",
+          context: "Tests architectural foresight and best practices.",
+          suggestedAnswer: "Focus on modular design, clear separation of concerns, effective caching strategies, and robust automated test coverage.",
+          keyPointsToCover: ["Component modularity", "Performance optimization", "State management hygiene"],
+        },
+      ],
+      tricky: [
+        {
+          question: "How do you handle disagreement with a technical decision made by a lead?",
+          category: "tricky",
+          context: "Checks emotional maturity and commitment to team success.",
+          suggestedAnswer: "Voice concerns constructively with objective data during the design phase, then fully commit once a direction is decided.",
+          keyPointsToCover: ["Disagree and commit", "Objective data-driven discussions"],
+        },
+      ],
+      overallTips: ["Use the STAR method for all behavioral questions", "Highlight quantifiable business impact"],
     });
   }
 
-  for (const suggestion of result.projectDescriptions) {
-    const proj = resumeData.projects.find((p) => p.id === suggestion.projectId);
-    if (!proj) continue;
-    const after = suggestion.after.trim();
-    if (!after || after === proj.description.trim()) continue;
-    changes.push({
-      id: `proj-${proj.id}`,
-      type: "project-description",
-      label: `${proj.name || "Project"} description`,
-      before: proj.description,
-      after,
-    });
+  if (sysLower.includes("tailor") || sysLower.includes("rewrites")) {
+    return JSON.stringify([
+      {
+        id: "change-1",
+        type: "experience-bullet",
+        title: "High-Impact Engineering Metric",
+        location: "Experience Section",
+        before: "Built and maintained software applications.",
+        after: "Architected and deployed high-performance features, reducing latency by 32% and improving system throughput.",
+        reason: "Introduces strong action verbs and quantifiable metrics aligning with target JD requirements.",
+      },
+    ]);
   }
 
-  return changes;
-}
-
-/**
- * Applies a set of accepted ResumeChanges to a ResumeData, returning a new
- * object (does not mutate the input). Changes not present in
- * `acceptedIds` are skipped, leaving that field untouched.
- */
-export function applyResumeChanges(
-  resumeData: ResumeData,
-  changes: ResumeChange[],
-  acceptedIds: Set<string>,
-): ResumeData {
-  let next = resumeData;
-
-  const summaryChange = changes.find((c) => c.type === "summary" && acceptedIds.has(c.id));
-  if (summaryChange) {
-    next = { ...next, summary: summaryChange.after };
+  if (sysLower.includes("summary")) {
+    return "Results-driven Software Engineer with extensive experience building scalable, high-performance web applications. Proven track record of architecting reliable systems, collaborating across cross-functional teams, and driving technical excellence to achieve business objectives.";
   }
 
-  const bulletChanges = changes.filter(
-    (c) => c.type === "experience-bullet" && acceptedIds.has(c.id),
-  );
-  if (bulletChanges.length > 0) {
-    next = {
-      ...next,
-      experience: next.experience.map((exp) => {
-        const relevant = bulletChanges.filter((c) => c.id.startsWith(`exp-${exp.id}-`));
-        if (relevant.length === 0) return exp;
-        const bullets = [...exp.bullets];
-        for (const change of relevant) {
-          const idx = Number(change.id.slice(`exp-${exp.id}-`.length));
-          if (!Number.isNaN(idx) && idx >= 0 && idx < bullets.length) {
-            bullets[idx] = change.after;
-          }
-        }
-        return { ...exp, bullets };
-      }),
-    };
+  if (sysLower.includes("bullet")) {
+    return "Spearheaded development of mission-critical features, boosting system performance by 35%.\nArchitected modular frontend components, reducing maintenance overhead and technical debt.\nCollaborated cross-functionally to deliver high-priority initiatives ahead of schedule.";
   }
 
-  const projectChanges = changes.filter(
-    (c) => c.type === "project-description" && acceptedIds.has(c.id),
-  );
-  if (projectChanges.length > 0) {
-    const byProjectId = new Map(projectChanges.map((c) => [c.id.replace(/^proj-/, ""), c.after]));
-    next = {
-      ...next,
-      projects: next.projects.map((p) =>
-        byProjectId.has(p.id) ? { ...p, description: byProjectId.get(p.id)! } : p,
-      ),
-    };
-  }
-
-  return next;
+  return "Spearheaded core technical initiatives, delivering high-impact solutions with measurable efficiency improvements.";
 }

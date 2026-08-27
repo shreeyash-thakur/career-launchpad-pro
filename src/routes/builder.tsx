@@ -24,12 +24,13 @@ import { SectionOrderForm } from "@/features/resume-builder/components/section-o
 import { TemplatePicker } from "@/features/resume-builder/components/template-picker";
 import { CustomizePanel } from "@/features/resume-builder/components/customize-panel";
 import { ResumePreview } from "@/features/resume-builder/components/resume-preview";
+import { FresherGuidePanel } from "@/features/resume-builder/components/fresher-guide-panel";
+import { ScoreDeltaBanner } from "@/features/resume-builder/components/score-delta-banner";
 import { getTemplate } from "@/features/resume-builder/templates";
-import { Sparkles, X, AlertTriangle, ArrowLeft, Loader2, FileEdit, Eye } from "lucide-react";
+import { Sparkles, X, AlertTriangle, ArrowLeft, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { ResumeService, type FirestoreResume } from "@/lib/resume-service";
 import { Button } from "@/components/ui/button";
-import { stripUndefined } from "@/lib/utils";
 
 export const Route = createFileRoute("/builder")({
   head: () => ({
@@ -38,19 +39,18 @@ export const Route = createFileRoute("/builder")({
       {
         name: "description",
         content:
-          "Build a recruiter-ready resume with a live preview, 25 original templates, and one-click PDF export.",
+          "Build a recruiter-ready resume with live ATS tailoring, 25 original templates, and one-click export.",
       },
     ],
   }),
   validateSearch: (
     search: Record<string, unknown>,
-  ): { template?: string; fromOnboarding?: string; resumeId?: string } =>
-    stripUndefined({
-      template: typeof search["template"] === "string" ? search["template"] : undefined,
-      fromOnboarding:
-        typeof search["fromOnboarding"] === "string" ? search["fromOnboarding"] : undefined,
-      resumeId: typeof search["resumeId"] === "string" ? search["resumeId"] : undefined,
-    }),
+  ): { template?: string; fromOnboarding?: string; resumeId?: string } => ({
+    template: typeof search["template"] === "string" ? search["template"] : undefined,
+    fromOnboarding:
+      typeof search["fromOnboarding"] === "string" ? search["fromOnboarding"] : undefined,
+    resumeId: typeof search["resumeId"] === "string" ? search["resumeId"] : undefined,
+  }),
   component: BuilderPage,
 });
 
@@ -63,10 +63,9 @@ function BuilderPage() {
   const [docError, setDocError] = useState<string | null>(null);
   const [loadedResume, setLoadedResume] = useState<FirestoreResume | null>(null);
   const [showBanner, setShowBanner] = useState(false);
-  const [mobileView, setMobileView] = useState<"edit" | "preview">("edit");
+  const [scoreDelta, setScoreDelta] = useState<{ before: number; after: number } | null>(null);
   const appliedRef = useRef(false);
 
-  // Fetch Firestore resume if resumeId provided
   useEffect(() => {
     let active = true;
     async function loadResume() {
@@ -108,17 +107,14 @@ function BuilderPage() {
     };
   }, [search.resumeId, user?.uid, authLoading]);
 
-  const store = useResumeStore(
-    stripUndefined({
-      resumeId: search.resumeId,
-      userId: user?.uid,
-      initialResume: loadedResume,
-    }),
-  );
+  const store = useResumeStore({
+    resumeId: search.resumeId,
+    userId: user?.uid,
+    initialResume: loadedResume,
+  });
 
   const { title, setTitle, data, setData, style, setStyle } = store;
 
-  // Apply template from URL search param (from onboarding or landing page)
   useEffect(() => {
     if (appliedRef.current) return;
     const templateId = search.template;
@@ -134,10 +130,9 @@ function BuilderPage() {
     }
   }, [search.template, search.fromOnboarding, setStyle]);
 
-  // Auto-dismiss banner after 5 seconds
   useEffect(() => {
     if (!showBanner) return;
-    const t = setTimeout(() => setShowBanner(false), 5000);
+    const t = setTimeout(() => setShowBanner(false), 6000);
     return () => clearTimeout(t);
   }, [showBanner]);
 
@@ -185,9 +180,25 @@ function BuilderPage() {
     );
   }
 
+  const isFresher = Boolean(
+    loadedResume?.fresherMode ||
+      loadedResume?.questionnaireAnswers?.["experience"] === "student" ||
+      loadedResume?.questionnaireAnswers?.["experience"] === "entry" ||
+      search.fromOnboarding === "1",
+  );
+
   const recommendedName = search.template
     ? (getTemplate(search.template)?.name ?? "template")
     : "template";
+
+  const handleApplyFresherOrder = () => {
+    setData((prev) => {
+      const preferred = ["summary", "education", "projects", "skills", "experience", "certifications", "languages"] as const;
+      const customOnes = prev.sectionOrder.filter((k) => !(preferred as readonly string[]).includes(k));
+      const newOrder = [...preferred.filter((k) => prev.sectionOrder.includes(k)), ...customOnes];
+      return { ...prev, sectionOrder: newOrder };
+    });
+  };
 
   return (
     <div className="flex h-svh flex-col bg-secondary/30">
@@ -197,7 +208,7 @@ function BuilderPage() {
           <div className="flex items-center gap-2 text-primary">
             <Sparkles className="size-4 shrink-0" aria-hidden="true" />
             <span>
-              Based on your answers, we selected the{" "}
+              Based on your background, we loaded the{" "}
               <strong className="font-semibold">{recommendedName}</strong> template for you. Switch
               anytime in the Design tab.
             </span>
@@ -214,6 +225,15 @@ function BuilderPage() {
         </div>
       )}
 
+      {/* Score Delta Banner after Tailoring / Optimization */}
+      {scoreDelta && (
+        <ScoreDeltaBanner
+          beforeScore={scoreDelta.before}
+          afterScore={scoreDelta.after}
+          onDismiss={() => setScoreDelta(null)}
+        />
+      )}
+
       <BuilderToolbar
         title={title}
         onTitleChange={setTitle}
@@ -224,49 +244,20 @@ function BuilderPage() {
         canRedo={store.canRedo}
         onUndo={store.undo}
         onRedo={store.redo}
-        onReplaceData={(next) => setData(next)}
+        onReplaceData={(next, before, after) => {
+          setData(next);
+          if (before !== undefined && after !== undefined) {
+            setScoreDelta({ before, after });
+          }
+        }}
         onResetBlank={() => store.resetToBlank(blankResume())}
         onResetSample={() => setData(sampleResume())}
         isCloudSynced={Boolean(search.resumeId && user?.uid)}
         uid={user?.uid}
       />
 
-      {/* Mobile Edit/Preview toggle — desktop shows both panels side by side,
-          but stacking two full-height scrollable panels on a phone produces
-          a broken double-scroll layout, so mobile shows one at a time. */}
-      <div className="no-print flex shrink-0 border-b border-border bg-background lg:hidden">
-        <button
-          type="button"
-          onClick={() => setMobileView("edit")}
-          className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition-colors ${
-            mobileView === "edit"
-              ? "border-b-2 border-primary text-primary"
-              : "border-b-2 border-transparent text-muted-foreground"
-          }`}
-        >
-          <FileEdit className="size-3.5" />
-          Edit
-        </button>
-        <button
-          type="button"
-          onClick={() => setMobileView("preview")}
-          className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition-colors ${
-            mobileView === "preview"
-              ? "border-b-2 border-primary text-primary"
-              : "border-b-2 border-transparent text-muted-foreground"
-          }`}
-        >
-          <Eye className="size-3.5" />
-          Preview
-        </button>
-      </div>
-
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[420px_1fr]">
-        <div
-          className={`no-print no-print-clip min-h-0 overflow-y-auto border-r border-border bg-background lg:order-1 lg:block ${
-            mobileView === "edit" ? "block" : "hidden"
-          }`}
-        >
+        <div className="no-print no-print-clip order-2 min-h-0 overflow-y-auto border-r border-border bg-background lg:order-1">
           <Tabs defaultValue="content" className="flex h-full flex-col">
             <div className="border-b border-border px-4 pt-3">
               <TabsList className="w-full">
@@ -280,9 +271,14 @@ function BuilderPage() {
             </div>
 
             <TabsContent value="content" className="mt-0 flex-1 overflow-y-auto p-4">
+              {/* Fresher Contextual Guide Panel */}
+              {isFresher && (
+                <FresherGuidePanel data={data} onApplyOrder={handleApplyFresherOrder} />
+              )}
+
               <Accordion
                 type="multiple"
-                defaultValue={["personal", "experience"]}
+                defaultValue={["personal", "experience", "education"]}
                 className="space-y-2"
               >
                 <AccordionItem
@@ -391,7 +387,7 @@ function BuilderPage() {
                     Section order
                   </AccordionTrigger>
                   <AccordionContent className="pb-4">
-                    <SectionOrderForm data={data} onChange={setData} />
+                    <SectionOrderForm data={data} onChange={setData} fresherMode={isFresher} />
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
@@ -416,11 +412,7 @@ function BuilderPage() {
           </Tabs>
         </div>
 
-        <div
-          className={`min-h-0 overflow-hidden lg:order-2 lg:block ${
-            mobileView === "preview" ? "block" : "hidden"
-          }`}
-        >
+        <div className="order-1 min-h-0 overflow-hidden lg:order-2">
           <ResumePreview data={data} style={style} onStyleChange={setStyle} />
         </div>
       </div>

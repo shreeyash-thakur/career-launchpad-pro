@@ -1,3 +1,4 @@
+"use client";
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -12,10 +13,8 @@ import {
   Plus,
   Menu,
   X,
-  ChevronRight,
-  Shield,
+  Target,
   Loader2,
-  FileSearch,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/auth-context";
@@ -27,7 +26,6 @@ import { AiToolsView } from "./ai-tools-view";
 import { AtsCheckerView } from "./ats-checker-view";
 import { ProfileView } from "./profile-view";
 import { SettingsView } from "./settings-view";
-import { UploadResumeDialog } from "./upload-resume-dialog";
 import { cn } from "@/lib/utils";
 
 type TabKey = "overview" | "resumes" | "templates" | "ats" | "ai-tools" | "profile" | "settings";
@@ -37,15 +35,13 @@ interface Props {
 }
 
 export function DashboardLayout({ initialTab }: Props) {
-  const { user, loading: authLoading, signOut, openAuthModal } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<TabKey>((initialTab as TabKey) || "overview");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [resumes, setResumes] = useState<FirestoreResume[]>([]);
   const [loadingResumes, setLoadingResumes] = useState(true);
-  const [atsPreselectId, setAtsPreselectId] = useState<string | undefined>(undefined);
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
 
   const fetchResumes = useCallback(async () => {
     if (!user?.uid) {
@@ -69,10 +65,6 @@ export function DashboardLayout({ initialTab }: Props) {
     }
   }, [authLoading, fetchResumes]);
 
-  // initialTab only reflects the URL at first mount; if the user is already
-  // on /dashboard and clicks an in-app link to /dashboard?tab=X, React
-  // Router re-renders this component without remounting it, so the
-  // activeTab useState initializer won't re-run. This keeps them in sync.
   useEffect(() => {
     if (initialTab) {
       setActiveTab(initialTab as TabKey);
@@ -81,7 +73,6 @@ export function DashboardLayout({ initialTab }: Props) {
 
   const handleCreateNewResume = async () => {
     if (!user?.uid) {
-      // Prompt auth modal or navigate directly to onboarding for guests
       void navigate({ to: "/onboarding" });
       return;
     }
@@ -91,7 +82,6 @@ export function DashboardLayout({ initialTab }: Props) {
         title: "Untitled Resume",
         questionnaireCompleted: false,
       });
-      // Navigate to onboarding questionnaire with resumeId
       void navigate({
         to: "/onboarding",
         search: { resumeId: created.id, fromDashboard: "1" },
@@ -102,38 +92,23 @@ export function DashboardLayout({ initialTab }: Props) {
     }
   };
 
-  const handleResumeUploaded = (created: FirestoreResume) => {
-    void fetchResumes();
-    // The uploaded resume is already fully populated, so skip the
-    // onboarding questionnaire and go straight to the editor for review.
-    void navigate({
-      to: "/builder",
-      search: { resumeId: created.id, template: created.templateId },
-    });
-  };
-
-  const navItems: {
-    key: TabKey;
-    label: string;
-    icon: typeof LayoutDashboard;
-    badge?: number;
-  }[] = [
-    { key: "overview", label: "Dashboard", icon: LayoutDashboard },
+  const navItems = [
+    { key: "overview" as const, label: "Dashboard", icon: LayoutDashboard },
     {
-      key: "resumes",
+      key: "resumes" as const,
       label: "My Resumes",
       icon: FileText,
-      ...(resumes.length > 0 ? { badge: resumes.length } : {}),
+      badge: resumes.length > 0 ? resumes.length : undefined,
     },
-    { key: "templates", label: "Templates", icon: Layout },
-    { key: "ats", label: "ATS Score Checker", icon: FileSearch },
-    { key: "ai-tools", label: "AI Career Tools", icon: Bot },
+    { key: "ats" as const, label: "ATS Job Matcher", icon: Target },
+    { key: "templates" as const, label: "Templates", icon: Layout },
+    { key: "ai-tools" as const, label: "AI Career Tools", icon: Bot },
   ];
 
   const secondaryNavItems = [
-    { key: "profile", label: "Profile", icon: User },
-    { key: "settings", label: "Settings", icon: Settings },
-  ] as const;
+    { key: "profile" as const, label: "Profile", icon: User },
+    { key: "settings" as const, label: "Settings", icon: Settings },
+  ];
 
   if (authLoading) {
     return (
@@ -368,7 +343,6 @@ export function DashboardLayout({ initialTab }: Props) {
               onRefresh={fetchResumes}
               onCreateNew={handleCreateNewResume}
               onNavigateTab={(tab) => setActiveTab(tab as TabKey)}
-              onUploadResume={() => setUploadDialogOpen(true)}
             />
           )}
 
@@ -377,36 +351,22 @@ export function DashboardLayout({ initialTab }: Props) {
               resumes={resumes}
               onRefresh={fetchResumes}
               onCreateNew={handleCreateNewResume}
-              onNavigateToAts={(resumeId) => {
-                setAtsPreselectId(resumeId);
-                setActiveTab("ats");
-              }}
             />
+          )}
+
+          {activeTab === "ats" && (
+            <AtsCheckerView resumes={resumes} />
           )}
 
           {activeTab === "templates" && <TemplatesView onRefreshResumes={fetchResumes} />}
 
-          {activeTab === "ats" && (
-            <AtsCheckerView
-              resumes={resumes}
-              {...(atsPreselectId ? { preselectId: atsPreselectId } : {})}
-            />
-          )}
-
-          {activeTab === "ai-tools" && <AiToolsView />}
+          {activeTab === "ai-tools" && <AiToolsView resumes={resumes} />}
 
           {activeTab === "profile" && <ProfileView />}
 
           {activeTab === "settings" && <SettingsView resumes={resumes} />}
         </main>
       </div>
-
-      <UploadResumeDialog
-        open={uploadDialogOpen}
-        onOpenChange={setUploadDialogOpen}
-        uid={user?.uid}
-        onCreated={handleResumeUploaded}
-      />
     </div>
   );
 }
