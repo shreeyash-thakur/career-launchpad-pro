@@ -1,11 +1,9 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   Download,
   Redo2,
   Undo2,
-  FileJson,
-  Upload,
   RotateCcw,
   Sparkles,
   Check,
@@ -30,7 +28,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { ResumeData, ResumeStyle } from "../types";
 import type { SaveStatus } from "../hooks/use-resume-store";
-import { downloadJson, readJsonFile } from "../utils/export";
 import { calculateResumeCompletion } from "../utils/completion";
 import { ResumeReadyModal } from "./resume-ready-modal";
 import { ResumeTailoringDialog } from "./resume-tailoring-dialog";
@@ -70,25 +67,12 @@ export function BuilderToolbar({
   isCloudSynced = false,
   uid,
 }: Props) {
-  const importRef = useRef<HTMLInputElement>(null);
   const [readyModalOpen, setReadyModalOpen] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [tailorModalOpen, setTailorModalOpen] = useState(false);
   const { ExportSurface, download, exporting } = useResumeExport(data, style, title);
 
   const completion = calculateResumeCompletion(data);
-
-  async function handleImport(file: File | undefined) {
-    if (!file) return;
-    try {
-      const parsed = await readJsonFile<ResumeData>(file);
-      if (parsed && typeof parsed === "object" && "personal" in parsed) {
-        onReplaceData(parsed);
-      }
-    } catch {
-      // Silently ignore
-    }
-  }
 
   const handleDownload = async () => {
     try {
@@ -218,31 +202,6 @@ export function BuilderToolbar({
 
           <div className="mx-1 h-5 w-px bg-border hidden sm:block" />
 
-          <input
-            ref={importRef}
-            type="file"
-            accept="application/json"
-            className="hidden"
-            onChange={(e) => handleImport(e.target.files?.[0])}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 text-xs hidden sm:flex"
-            onClick={() => importRef.current?.click()}
-          >
-            <Upload className="size-3.5" /> Import
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 text-xs hidden md:flex"
-            onClick={() => downloadJson(`${title || "resume"}.json`, data)}
-          >
-            <FileJson className="size-3.5" /> JSON
-          </Button>
-
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button
@@ -257,8 +216,8 @@ export function BuilderToolbar({
               <AlertDialogHeader>
                 <AlertDialogTitle>Start a fresh resume?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This resets the current draft in the editor. You can always undo or export a JSON
-                  backup first.
+                  This resets the current draft in the editor. You can always undo before clearing
+                  it.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -302,7 +261,7 @@ export function BuilderToolbar({
         open={tailorModalOpen}
         onOpenChange={setTailorModalOpen}
         resumeData={data}
-        uid={uid}
+        {...(uid ? { uid } : {})}
         onApply={(updated, before, after) => {
           onReplaceData(updated, before, after);
         }}
