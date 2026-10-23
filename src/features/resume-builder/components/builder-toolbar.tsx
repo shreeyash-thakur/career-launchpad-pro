@@ -30,10 +30,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { ResumeData, ResumeStyle } from "../types";
 import type { SaveStatus } from "../hooks/use-resume-store";
-import { downloadJson, printResume, readJsonFile } from "../utils/export";
+import { downloadJson, readJsonFile } from "../utils/export";
 import { calculateResumeCompletion } from "../utils/completion";
 import { ResumeReadyModal } from "./resume-ready-modal";
 import { ResumeTailoringDialog } from "./resume-tailoring-dialog";
+import { useResumeExport } from "./resume-export-surface";
+import { toast } from "sonner";
 
 interface Props {
   title: string;
@@ -72,6 +74,7 @@ export function BuilderToolbar({
   const [readyModalOpen, setReadyModalOpen] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [tailorModalOpen, setTailorModalOpen] = useState(false);
+  const { ExportSurface, download, exporting } = useResumeExport(data, style, title);
 
   const completion = calculateResumeCompletion(data);
 
@@ -87,11 +90,18 @@ export function BuilderToolbar({
     }
   }
 
-  const handleDownload = () => {
-    printResume(style.pageSize);
-    setTimeout(() => {
+  const handleDownload = async () => {
+    try {
+      await download("pdf");
       setReadyModalOpen(true);
-    }, 400);
+    } catch (err) {
+      console.error("Failed to export resume:", err);
+      toast.error(
+        err instanceof Error && /render|generate/i.test(err.message)
+          ? err.message
+          : "Couldn't generate the download. Please try again.",
+      );
+    }
   };
 
   return (
@@ -276,8 +286,14 @@ export function BuilderToolbar({
             size="sm"
             className="gap-1.5 font-semibold shadow-[var(--shadow-glow)]"
             onClick={handleDownload}
+            disabled={exporting !== null}
           >
-            <Download className="size-3.5" /> Download PDF
+            {exporting ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Download className="size-3.5" />
+            )}
+            {exporting ? "Preparing…" : "Download PDF"}
           </Button>
         </div>
       </div>
@@ -295,9 +311,11 @@ export function BuilderToolbar({
       <ResumeReadyModal
         open={readyModalOpen}
         onOpenChange={setReadyModalOpen}
-        pageSize={style.pageSize}
         resumeTitle={title}
+        onDownloadAgain={handleDownload}
+        isExporting={exporting !== null}
       />
+      <ExportSurface />
     </>
   );
 }

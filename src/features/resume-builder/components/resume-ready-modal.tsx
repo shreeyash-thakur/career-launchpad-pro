@@ -15,30 +15,27 @@ import {
   CheckCircle2,
   Sparkles,
   FileText,
+  Loader2,
 } from "lucide-react";
-import { printResume } from "../utils/export";
-import type { PageSize } from "../types";
 
 interface ResumeReadyModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  pageSize: PageSize;
   resumeTitle?: string;
   onNewResume?: () => void;
+  onDownloadAgain: () => void;
+  isExporting: boolean;
 }
 
 export function ResumeReadyModal({
   open,
   onOpenChange,
-  pageSize,
   resumeTitle,
   onNewResume,
+  onDownloadAgain,
+  isExporting,
 }: ResumeReadyModalProps) {
   const navigate = useNavigate();
-
-  const handleDownloadAgain = () => {
-    printResume(pageSize);
-  };
 
   const handleGoDashboard = () => {
     onOpenChange(false);
@@ -90,10 +87,15 @@ export function ResumeReadyModal({
             variant="hero"
             size="lg"
             className="w-full gap-2 font-semibold shadow-[var(--shadow-glow)]"
-            onClick={handleDownloadAgain}
+            onClick={onDownloadAgain}
+            disabled={isExporting}
           >
-            <Download className="size-4" />
-            Download PDF
+            {isExporting ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Download className="size-4" />
+            )}
+            {isExporting ? "Preparing…" : "Download PDF"}
           </Button>
 
           <Button
