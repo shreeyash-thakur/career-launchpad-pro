@@ -130,6 +130,10 @@ export function ExperienceForm({ data, onChange }: Props) {
                   const bullets = await generateExperienceBullets({
                     role: exp.role,
                     company: exp.company,
+                    location: exp.location,
+                    startDate: exp.startDate,
+                    endDate: exp.endDate,
+                    current: exp.current,
                     existingBullets: exp.bullets.filter(Boolean),
                   });
                   if (bullets.length) update(index, { bullets });

@@ -144,13 +144,28 @@ export function PersonalInfoForm({ data, onChange, showPhoto }: Props) {
       <AiButton
         onClick={async () => {
           const topSkills = data.skills.flatMap((g) => g.items).slice(0, 6);
-          const recentExp = data.experience[0];
           const summary = await generateSummary({
-            fullName: data.personal.fullName,
             title: data.personal.title,
             topSkills,
-            recentRole: recentExp?.role ?? "",
-            recentCompany: recentExp?.company ?? "",
+            existingSummary: data.summary,
+            experience: data.experience.map(({ role, company, bullets }) => ({
+              role,
+              company,
+              bullets: bullets.filter(Boolean),
+            })),
+            education: data.education.map(({ school, degree, field }) => ({
+              school,
+              degree,
+              field,
+            })),
+            projects: data.projects.map(({ name, description, tech }) => ({
+              name,
+              description,
+              tech,
+            })),
+            certifications: data.certifications.map(({ name, issuer }) =>
+              [name, issuer].filter(Boolean).join(" — "),
+            ),
           });
           onChange((prev) => ({ ...prev, summary }));
         }}
