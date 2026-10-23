@@ -20,17 +20,7 @@ const OPENROUTER_API_KEY = process.env["OPENROUTER_API_KEY"] ?? "";
 const BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
 const SITE_URL = process.env["SITE_URL"] ?? "https://peasiprofile.app";
 
-// Ordered by quality/preference. Qwen3 Next 80B A3B Instruct is the primary
-// model (large 262K context, strong instruction following, free tier as of
-// writing). The rest are fallbacks tried in order if a model is rate
-// limited or unavailable — free OpenRouter models share a public pool with
-// other apps, so 429s are common under load.
-const MODEL_CHAIN = [
-  "qwen/qwen3-next-80b-a3b-instruct:free",
-  "z-ai/glm-5.2:free",
-  "nvidia/nemotron-3-ultra-550b-a55b:free",
-  "google/gemma-4-31b-it:free",
-] as const;
+const MODEL_CHAIN = ["google/gemma-4-31b-it:free"] as const;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
